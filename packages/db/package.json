@@ -1,0 +1,36 @@
+{
+  "name": "@spiral-backbone/db",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:deploy": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:migrate": "drizzle-kit migrate",
+    "db:start": "docker compose up -d",
+    "db:watch": "docker compose up",
+    "db:stop": "docker compose stop",
+    "db:down": "docker compose down"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.23.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@spiral-backbone/config": "*",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^6.0.3",
+    "varlock": "1.18.0"
+  }
+}

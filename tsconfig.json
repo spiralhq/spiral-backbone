@@ -1,0 +1,3 @@
+{
+  "extends": "@spiral-backbone/config/tsconfig.base.json"
+}

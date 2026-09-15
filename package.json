@@ -1,0 +1,42 @@
+{
+  "name": "spiral-backbone",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "dev:server": "turbo run dev -F server --",
+    "db:push": "turbo run db:push -F @spiral-backbone/db --",
+    "db:studio": "turbo run db:studio -F @spiral-backbone/db --",
+    "db:generate": "turbo run db:generate -F @spiral-backbone/db --",
+    "db:migrate": "turbo run db:migrate -F @spiral-backbone/db --",
+    "db:start": "turbo run db:start -F @spiral-backbone/db --",
+    "db:watch": "turbo run db:watch -F @spiral-backbone/db --",
+    "db:stop": "turbo run db:stop -F @spiral-backbone/db --",
+    "db:down": "turbo run db:down -F @spiral-backbone/db --",
+    "env:generate": "varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
+    "postinstall": "varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
+    "check": "oxlint && oxfmt --write"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@spiral-backbone/config": "*",
+    "@types/node": "^26.4.1",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
+    "turbo": "^2.10.12",
+    "typescript": "^6.0.3",
+    "varlock": "1.18.0"
+  },
+  "packageManager": "npm@11.19.1",
+  "allowScripts": {
+    "esbuild": true
+  }
+}
