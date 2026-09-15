@@ -1,0 +1,8 @@
+import { describe, expect, it } from "vitest";
+import { PACKAGE_NAME } from "./index";
+
+describe("@spiral-backbone/cli", () => {
+  it("exports its package name", () => {
+    expect(PACKAGE_NAME).toBe("@spiral-backbone/cli");
+  });
+});

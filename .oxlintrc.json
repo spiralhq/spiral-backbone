@@ -7,5 +7,31 @@
   "rules": {},
   "env": {
     "builtin": true
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/packages/eval/verifier/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          "@spiral-backbone/protocol",
+          "kubo-rpc-client",
+          "ipfs-http-client",
+          "helia"
+        ]
+      }
+    },
+    {
+      "files": ["**/packages/cli/src/commands/fetch.ts"],
+      "rules": {
+        "no-restricted-imports": ["error", "@spiral-backbone/db", "@spiral-backbone/indexer"]
+      }
+    },
+    {
+      "files": ["**/packages/cli/src/commands/fetch/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": ["error", "@spiral-backbone/db", "@spiral-backbone/indexer"]
+      }
+    }
+  ]
 }

@@ -13,6 +13,9 @@
     "check-types": {
       "dependsOn": ["^check-types"]
     },
+    "test": {
+      "dependsOn": ["^build"]
+    },
     "dev": {
       "cache": false,
       "persistent": true
@@ -49,7 +52,6 @@
   },
   "globalEnv": [
     "CI",
-    "CORS_ORIGIN",
     "DATABASE_URL",
     "NODE_ENV",
     "VERCEL",
