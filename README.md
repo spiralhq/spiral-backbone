@@ -21,7 +21,9 @@ spiral-backbone/
 │   ├── indexer/         # Off-chain indexer
 │   └── eval/            # Evaluation harness
 │       └── verifier/    # Isolated CID re-computation, evidence for hypothesis H1
-├── scripts/             # Repo-level scripts (e.g. import-boundary checker)
+├── infra/
+│   └── kubo/            # Kubo node setup script + systemd unit
+├── scripts/             # Repo-level scripts (import-boundary checker, Kubo node control agent)
 └── dataset/             # Evaluation dataset (curated works used by the evaluation harness)
 ```
 
@@ -36,6 +38,11 @@ Install dependencies:
 ```bash
 npm install
 ```
+
+Docker is required to run the full test suite: `npm run check`, `npm run test:scripts`,
+and the `@spiral-backbone/eval` package's conformance/Kubo tests all spin up real
+containers (a Kubo node, and a systemd-in-Docker container for the SSH control-agent
+tests) and need a working local Docker daemon.
 
 ### Database Setup
 
@@ -79,6 +86,20 @@ These are enforced two ways in parallel: an Oxlint `no-restricted-imports` overr
 `.oxlintrc.json`, catches dynamic `import()` too) and the custom regex-based
 `scripts/check-boundaries.ts` script (redundant on purpose).
 
+## IPFS Nodes
+
+The Spiral Chunking Profile v1 (CID version 1, sha2-256, fixed 262144-byte chunks,
+raw leaves, balanced layout, 174 links/node) is implemented twice, independently:
+`packages/eval/verifier/` (pure TypeScript, `ipfs-unixfs-importer`) and the Kubo
+submission path exercised in `packages/eval/src/conformance.test.ts`. That test
+compares both on three synthetic file sizes and runs in CI on every push.
+
+`infra/kubo/` and `scripts/kubo-node-control.ts` are the automation for the three
+real Kubo nodes described in `docs/ipfs-nodes-runbook.md` — provisioning the VPS
+themselves is a manual step (see that runbook); everything else (setup, the
+systemd unit, and SSH start/shutdown/status control) is code, tested against local
+Docker containers.
+
 ## Available Scripts
 
 - `npm run dev` — runs `turbo run dev`. No package currently defines a `dev` script; this
@@ -90,9 +111,11 @@ These are enforced two ways in parallel: an Oxlint `no-restricted-imports` overr
   `db:stop` / `db:down` — Drizzle/Docker Compose commands, forwarded to `packages/db`.
 - `npm run env:generate` — regenerate the Varlock-generated env accessor.
 - `npm run check` — Oxlint, Oxfmt (`--write`, rewrites files), the import-boundary check,
-  and the scripts test suite. Intended for local development.
+  and the scripts test suite. Intended for local development. (Requires Docker — some of
+  the scripts tests build and run real containers.)
 - `npm run check:ci` — same as `check`, but runs Oxfmt with `--check` instead of `--write`
-  so CI fails on unformatted code instead of silently reformatting it.
+  so CI fails on unformatted code instead of silently reformatting it. (Also requires
+  Docker, for the same reason.)
 - `npm run test` — runs `turbo run test` across all packages.
 - `npm run check:boundaries` — runs the import-boundary checker directly.
 - `npm run test:scripts` — runs the vitest suite for `scripts/`.

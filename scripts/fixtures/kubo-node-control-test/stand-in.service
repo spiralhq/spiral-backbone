@@ -1,0 +1,12 @@
+[Unit]
+Description=Stand-in service for kubo-node-control testing
+
+[Service]
+# --sh-exec "/bin/cat" keeps each connection open; plain `ncat -lk` reads its own
+# stdin (systemd's /dev/null) and closes instantly, indistinguishable from a
+# port-forwarding layer with nothing listening (see checkSwarmReachable).
+ExecStart=/usr/bin/ncat -lk 9000 --sh-exec "/bin/cat"
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Spiral Kubo (IPFS) node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ipfs
+Environment=IPFS_PATH=/home/ipfs/.ipfs
+ExecStart=/usr/local/bin/ipfs daemon --enable-gc=false
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

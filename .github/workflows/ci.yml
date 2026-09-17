@@ -13,6 +13,11 @@ jobs:
         with:
           node-version: 26
       - run: npm ci
+      - run: docker pull ipfs/kubo:v0.43.1
+      # Warms the cache for scripts/kubo-node-control.test.ts's systemd-in-Docker
+      # image build, which otherwise pays a cold ubuntu:24.04 pull + full
+      # apt-get install inside its 120s beforeAll timeout budget.
+      - run: docker pull ubuntu:24.04
       - run: npm run build
       - run: npm run check-types
       - run: npm run check:ci

@@ -10,7 +10,13 @@ export const boundaryRules: BoundaryRule[] = [
   {
     name: "eval-verifier-isolation",
     glob: "packages/eval/verifier/**/*.ts",
-    forbidden: ["@spiral-backbone/protocol", "kubo-rpc-client", "ipfs-http-client", "helia"],
+    forbidden: [
+      "@spiral-backbone/protocol",
+      "kubo-rpc-client",
+      "ipfs-http-client",
+      "helia",
+      "../src",
+    ],
   },
   {
     name: "cli-fetch-isolation",

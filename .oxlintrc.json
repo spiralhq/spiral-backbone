@@ -17,7 +17,8 @@
           "@spiral-backbone/protocol",
           "kubo-rpc-client",
           "ipfs-http-client",
-          "helia"
+          "helia",
+          { "patterns": ["../src", "../src/*"] }
         ]
       }
     },

@@ -12,6 +12,12 @@
     "check-types": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "blockstore-core": "^7.0.1",
+    "ipfs-unixfs-importer": "^17.1.1",
+    "kubo-rpc-client": "^7.1.0",
+    "multiformats": "^14.0.5"
+  },
   "devDependencies": {
     "@spiral-backbone/config": "*",
     "typescript": "^6.0.3",
