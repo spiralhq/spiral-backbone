@@ -6,14 +6,30 @@
   "exports": {
     ".": {
       "default": "./src/index.ts"
+    },
+    "./generated/*": {
+      "default": "./src/generated/*/index.ts"
     }
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync-idl": "node scripts/sync-idl.ts",
+    "generate-clients": "node scripts/generate-clients.ts"
+  },
+  "dependencies": {
+    "@solana/kit": "^8.3.0",
+    "blockstore-core": "^7.0.1",
+    "ipfs-unixfs-importer": "^17.1.1",
+    "kubo-rpc-client": "^7.1.0",
+    "multiformats": "^14.0.5",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@codama/nodes-from-anchor": "^1.5.6",
+    "@codama/renderers-js": "^2.5.0",
     "@spiral-backbone/config": "*",
+    "codama": "^1.11.0",
     "typescript": "^6.0.3",
     "vitest": "^3.2.4"
   }

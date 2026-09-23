@@ -1,0 +1,448 @@
+{
+  "address": "6MK8C7frTETvrmM5dhN6jkUyXdxcMAfTjKkhG1Y7Pcbu",
+  "metadata": {
+    "name": "film",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "deactivate_replica",
+      "discriminator": [114, 174, 155, 219, 239, 204, 168, 82],
+      "accounts": [
+        {
+          "name": "film",
+          "writable": true
+        },
+        {
+          "name": "submitter",
+          "signer": true,
+          "relations": ["film"]
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "declare_replica",
+      "discriminator": [212, 176, 141, 76, 109, 76, 132, 182],
+      "accounts": [
+        {
+          "name": "film",
+          "writable": true
+        },
+        {
+          "name": "submitter",
+          "signer": true,
+          "relations": ["film"]
+        }
+      ],
+      "args": [
+        {
+          "name": "peer_id",
+          "type": {
+            "array": ["u8", 38]
+          }
+        },
+        {
+          "name": "peer_id_len",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "register_film",
+      "discriminator": [138, 132, 154, 171, 227, 0, 159, 126],
+      "accounts": [
+        {
+          "name": "submitter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "organization",
+          "writable": true
+        },
+        {
+          "name": "membership"
+        },
+        {
+          "name": "film",
+          "writable": true
+        },
+        {
+          "name": "organization_program",
+          "address": "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "cid",
+          "type": {
+            "array": ["u8", 64]
+          }
+        },
+        {
+          "name": "cid_len",
+          "type": "u8"
+        },
+        {
+          "name": "byte_size",
+          "type": "u64"
+        },
+        {
+          "name": "chunking_profile",
+          "type": "u8"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "update_access_policy",
+      "discriminator": [184, 122, 67, 170, 113, 155, 201, 40],
+      "accounts": [
+        {
+          "name": "film",
+          "writable": true
+        },
+        {
+          "name": "submitter",
+          "signer": true,
+          "relations": ["film"]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_policy",
+          "type": {
+            "defined": {
+              "name": "AccessPolicy"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Film",
+      "discriminator": [64, 83, 51, 112, 106, 117, 158, 226]
+    }
+  ],
+  "events": [
+    {
+      "name": "FilmRegistered",
+      "discriminator": [93, 163, 40, 55, 55, 121, 171, 233]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6005,
+      "name": "InvalidCidLength",
+      "msg": "CID is truncated or exceeds the Spiral Chunking Profile v1 length"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidCidPrefix",
+      "msg": "CID version/codec is outside the Spiral Chunking Profile v1"
+    },
+    {
+      "code": 6007,
+      "name": "ReplicaCapacityExceeded",
+      "msg": "Replica capacity (8) exceeded"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidReplicaIndex",
+      "msg": "Replica index is out of range"
+    }
+  ],
+  "types": [
+    {
+      "name": "AccessPolicy",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Public"
+          },
+          {
+            "name": "OrganizationOnly"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Film",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "organization",
+            "type": "pubkey"
+          },
+          {
+            "name": "submitter",
+            "type": "pubkey"
+          },
+          {
+            "name": "cid",
+            "type": {
+              "array": ["u8", 64]
+            }
+          },
+          {
+            "name": "cid_len",
+            "type": "u8"
+          },
+          {
+            "name": "byte_size",
+            "type": "u64"
+          },
+          {
+            "name": "chunking_profile",
+            "type": "u8"
+          },
+          {
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "name": "submitted_at",
+            "type": "i64"
+          },
+          {
+            "name": "access_policy",
+            "type": {
+              "defined": {
+                "name": "AccessPolicy"
+              }
+            }
+          },
+          {
+            "name": "replicas",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "ReplicaDeclaration"
+                  }
+                },
+                8
+              ]
+            }
+          },
+          {
+            "name": "replica_count",
+            "type": "u8"
+          },
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FilmRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "organization",
+            "type": "pubkey"
+          },
+          {
+            "name": "submitter",
+            "type": "pubkey"
+          },
+          {
+            "name": "cid",
+            "type": {
+              "array": ["u8", 64]
+            }
+          },
+          {
+            "name": "cid_len",
+            "type": "u8"
+          },
+          {
+            "name": "byte_size",
+            "type": "u64"
+          },
+          {
+            "name": "chunking_profile",
+            "type": "u8"
+          },
+          {
+            "name": "submitted_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Membership",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "organization",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "type": {
+              "defined": {
+                "name": "Role"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "MembershipStatus"
+              }
+            }
+          },
+          {
+            "name": "granted_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "granted_at",
+            "type": "i64"
+          },
+          {
+            "name": "revoked_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembershipStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Revoked"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Organization",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "slug",
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "member_count",
+            "type": "u32"
+          },
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReplicaDeclaration",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "peer_id",
+            "type": {
+              "array": ["u8", 38]
+            }
+          },
+          {
+            "name": "peer_id_len",
+            "type": "u8"
+          },
+          {
+            "name": "declared_at",
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Role",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Reader"
+          },
+          {
+            "name": "Submitter"
+          },
+          {
+            "name": "Admin"
+          }
+        ]
+      }
+    }
+  ]
+}

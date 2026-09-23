@@ -13,6 +13,14 @@ jobs:
         with:
           node-version: 26
       - run: npm ci
+      # packages/cli/src/e2e/submit-fetch-verify.test.ts (submit -> fetch -> verify against a
+      # real Surfpool surfnet + Kubo container) needs a sibling spiral-programs checkout with
+      # `anchor build` already run, plus the solana-keygen CLI — neither is available on this
+      # runner, and spiral-programs is a private repo, so adding a cross-repo checkout for it
+      # would require a new PAT/deploy-key secret, which is out of scope here. The test detects
+      # this at import time and skips itself (describe.skipIf) with a clear console message
+      # rather than failing; it's exercised for real only in a local dev environment where both
+      # sibling repos are checked out and built, per this plan's Prerequisites section.
       - run: docker pull ipfs/kubo:v0.43.1
       # Warms the cache for scripts/kubo-node-control.test.ts's systemd-in-Docker
       # image build, which otherwise pays a cold ubuntu:24.04 pull + full

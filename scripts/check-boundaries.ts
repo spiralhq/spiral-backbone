@@ -21,12 +21,22 @@ export const boundaryRules: BoundaryRule[] = [
   {
     name: "cli-fetch-isolation",
     glob: "packages/cli/src/commands/fetch.ts",
-    forbidden: ["@spiral-backbone/db", "@spiral-backbone/indexer"],
+    forbidden: [
+      "@spiral-backbone/db",
+      "@spiral-backbone/indexer",
+      "../../../db",
+      "../../../indexer",
+    ],
   },
   {
     name: "cli-fetch-isolation",
     glob: "packages/cli/src/commands/fetch/**/*.ts",
-    forbidden: ["@spiral-backbone/db", "@spiral-backbone/indexer"],
+    forbidden: [
+      "@spiral-backbone/db",
+      "@spiral-backbone/indexer",
+      "../../../../db",
+      "../../../../indexer",
+    ],
   },
 ];
 

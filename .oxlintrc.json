@@ -25,13 +25,32 @@
     {
       "files": ["**/packages/cli/src/commands/fetch.ts"],
       "rules": {
-        "no-restricted-imports": ["error", "@spiral-backbone/db", "@spiral-backbone/indexer"]
+        "no-restricted-imports": [
+          "error",
+          "@spiral-backbone/db",
+          "@spiral-backbone/indexer",
+          {
+            "patterns": ["../../../db", "../../../db/**", "../../../indexer", "../../../indexer/**"]
+          }
+        ]
       }
     },
     {
       "files": ["**/packages/cli/src/commands/fetch/**/*.ts"],
       "rules": {
-        "no-restricted-imports": ["error", "@spiral-backbone/db", "@spiral-backbone/indexer"]
+        "no-restricted-imports": [
+          "error",
+          "@spiral-backbone/db",
+          "@spiral-backbone/indexer",
+          {
+            "patterns": [
+              "../../../../db",
+              "../../../../db/**",
+              "../../../../indexer",
+              "../../../../indexer/**"
+            ]
+          }
+        ]
       }
     }
   ]

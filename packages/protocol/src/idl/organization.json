@@ -1,0 +1,486 @@
+{
+  "address": "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw",
+  "metadata": {
+    "name": "organization",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "assert_can_submit",
+      "discriminator": [207, 49, 188, 56, 51, 250, 238, 229],
+      "accounts": [
+        {
+          "name": "organization"
+        },
+        {
+          "name": "membership"
+        },
+        {
+          "name": "member",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "grant_membership",
+      "discriminator": [114, 101, 24, 35, 245, 48, 117, 71],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "organization",
+          "writable": true
+        },
+        {
+          "name": "admin_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member"
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "role",
+          "type": {
+            "defined": {
+              "name": "Role"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_organization",
+      "discriminator": [21, 20, 253, 138, 250, 160, 119, 87],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "organization",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [111, 114, 103, 97, 110, 105, 122, 97, 116, 105, 111, 110]
+              },
+              {
+                "kind": "arg",
+                "path": "slug"
+              }
+            ]
+          }
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slug",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "revoke_membership",
+      "discriminator": [109, 67, 109, 170, 189, 213, 233, 204],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "organization"
+        },
+        {
+          "name": "admin_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member"
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "transfer_authority",
+      "discriminator": [48, 169, 76, 72, 229, 180, 55, 161],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": ["organization"]
+        },
+        {
+          "name": "organization",
+          "writable": true
+        },
+        {
+          "name": "new_authority"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_role",
+      "discriminator": [36, 223, 162, 98, 168, 209, 75, 151],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "organization"
+        },
+        {
+          "name": "admin_membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member"
+        },
+        {
+          "name": "membership",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [109, 101, 109, 98, 101, 114, 115, 104, 105, 112]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_role",
+          "type": {
+            "defined": {
+              "name": "Role"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Membership",
+      "discriminator": [231, 141, 180, 98, 109, 168, 175, 166]
+    },
+    {
+      "name": "Organization",
+      "discriminator": [145, 38, 152, 251, 91, 57, 118, 160]
+    }
+  ],
+  "events": [
+    {
+      "name": "MembershipRevoked",
+      "discriminator": [191, 117, 121, 162, 171, 173, 117, 75]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "MembershipNotFound",
+      "msg": "Signer has no active membership in this organization"
+    },
+    {
+      "code": 6001,
+      "name": "MembershipRevoked",
+      "msg": "Membership has been revoked"
+    },
+    {
+      "code": 6002,
+      "name": "InsufficientRole",
+      "msg": "Role does not permit this action"
+    },
+    {
+      "code": 6003,
+      "name": "OrgMismatch",
+      "msg": "Membership belongs to a different organization"
+    },
+    {
+      "code": 6004,
+      "name": "MemberMismatch",
+      "msg": "Signer does not match membership.member"
+    }
+  ],
+  "types": [
+    {
+      "name": "Membership",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "organization",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "type": {
+              "defined": {
+                "name": "Role"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "MembershipStatus"
+              }
+            }
+          },
+          {
+            "name": "granted_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "granted_at",
+            "type": "i64"
+          },
+          {
+            "name": "revoked_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembershipRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "organization",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "revoked_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MembershipStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Revoked"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Organization",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "slug",
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "member_count",
+            "type": "u32"
+          },
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Role",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Reader"
+          },
+          {
+            "name": "Submitter"
+          },
+          {
+            "name": "Admin"
+          }
+        ]
+      }
+    }
+  ]
+}
