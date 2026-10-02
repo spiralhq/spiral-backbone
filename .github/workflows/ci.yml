@@ -26,6 +26,8 @@ jobs:
       # image build, which otherwise pays a cold ubuntu:24.04 pull + full
       # apt-get install inside its 120s beforeAll timeout budget.
       - run: docker pull ubuntu:24.04
+      # packages/db and packages/indexer tests start ephemeral postgres:18 containers.
+      - run: docker pull postgres:18
       - run: npm run build
       - run: npm run check-types
       - run: npm run check:ci

@@ -55,3 +55,6 @@ coverage
 .cache
 tmp
 temp
+
+# Downloaded dataset media (see dataset/README.md)
+dataset/files/

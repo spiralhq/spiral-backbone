@@ -14,7 +14,9 @@
       "dependsOn": ["^check-types"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["SPIRAL_E2E"],
+      "cache": false
     },
     "dev": {
       "cache": false,

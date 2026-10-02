@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 import { Command } from "commander";
 import { fetch_ as fetch } from "./commands/fetch/index";
 import { org } from "./commands/org/index";

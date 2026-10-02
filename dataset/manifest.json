@@ -1,0 +1,44 @@
+{
+  "manifest_version": 1,
+  "notice": "PLACEHOLDERS ONLY. The entries below exist to prove scripts/validate-manifest.ts works end to end; they are not the evaluation sample. Selecting the 20 works (7 small / 8 medium / 5 large) and confirming each one's public-domain status individually is the researcher's curatorial decision, completed before Phase 6 and checked with `node scripts/validate-manifest.ts --final`.",
+  "works": [
+    {
+      "work_id": "pd-001",
+      "title": "Duck and Cover",
+      "source": "Prelinger Archives",
+      "url": "https://archive.org/details/DuckandC1951",
+      "file_url": "https://archive.org/download/DuckandC1951/DuckandC1951.mp4",
+      "file_name": "DuckandC1951.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1951 civil-defense film produced by Archer Productions for the U.S. Federal Civil Defense Administration; catalogued as public domain in the Prelinger Archives (licenseurl creativecommons.org/licenses/publicdomain).",
+        "reference_url": "https://archive.org/details/DuckandC1951"
+      },
+      "resolution": "640x480",
+      "duration_seconds": 554.95,
+      "size_bytes": 57591076,
+      "size_band": "small",
+      "sha256": "4ba23cfc250d9471a7f73aef6000313977e4a16df6ecff4d2eca46ed61f710ed",
+      "placeholder": true
+    },
+    {
+      "work_id": "pd-002",
+      "title": "The General",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/TheGeneral1926",
+      "file_url": "https://archive.org/download/TheGeneral1926/The_General_1926_720p_512kb.mp4",
+      "file_name": "The_General_1926_720p_512kb.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "Released in 1926 (Buster Keaton / United Artists); U.S. copyright term for 1926 works expired on 2022-01-01. Item carries the Public Domain Mark 1.0 on the Internet Archive.",
+        "reference_url": "https://archive.org/details/TheGeneral1926"
+      },
+      "resolution": "320x240",
+      "duration_seconds": 4732.31,
+      "size_bytes": 419224226,
+      "size_band": "large",
+      "sha256": "655f3b521f7bd66abfc679fcd84e7988c1654fad7420e23f09a848a29375f21d",
+      "placeholder": true
+    }
+  ]
+}

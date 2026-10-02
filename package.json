@@ -23,8 +23,11 @@
     "postinstall": "varlock codegen --path ./packages/db/",
     "check:boundaries": "node scripts/check-boundaries.ts",
     "test:scripts": "vitest run scripts",
-    "check": "oxlint && oxfmt --write && npm run check:boundaries && npm run test:scripts",
-    "check:ci": "oxlint && oxfmt --check && npm run check:boundaries && npm run test:scripts"
+    "spiral": "tsx packages/cli/src/index.ts",
+    "indexer": "tsx packages/indexer/src/cli.ts",
+    "validate:manifest": "node scripts/validate-manifest.ts",
+    "check": "oxlint && oxfmt --write && npm run check:boundaries && npm run validate:manifest && npm run test:scripts",
+    "check:ci": "oxlint && oxfmt --check && npm run check:boundaries && npm run validate:manifest && npm run test:scripts"
   },
   "dependencies": {
     "zod": "^4.5.4"
@@ -34,6 +37,7 @@
     "@types/node": "^26.4.1",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
+    "tsx": "^4.23.15",
     "turbo": "^2.10.12",
     "typescript": "^6.0.3",
     "varlock": "1.18.0",

@@ -19,7 +19,8 @@
     "db:start": "docker compose up -d",
     "db:watch": "docker compose up",
     "db:stop": "docker compose stop",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "test": "vitest run"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -31,6 +32,7 @@
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3",
-    "varlock": "1.18.0"
+    "varlock": "1.18.0",
+    "vitest": "^3.2.4"
   }
 }

@@ -8,3 +8,6 @@ export function createDb(env: DatabaseConfig) {
 }
 
 export type Database = ReturnType<typeof createDb>;
+
+export * from "./schema";
+export { migrateCatalog, resetCatalog } from "./migrate";
