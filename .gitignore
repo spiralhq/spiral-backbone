@@ -58,3 +58,6 @@ temp
 
 # Downloaded dataset media (see dataset/README.md)
 dataset/files/
+
+# Evaluation outputs (see docs/eval-harness.md)
+results/

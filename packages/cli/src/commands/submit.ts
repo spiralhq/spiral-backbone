@@ -1,32 +1,40 @@
 import { readFile } from "node:fs/promises";
+import { getProgramDerivedAddress } from "@solana/kit";
 import {
-  bytesToCidString,
+  assertNodesAgree,
   cidStringToBytes,
+  describeEndpoint,
+  fetchPeerId,
   findFilmPda,
   findMembershipPda,
   findOrganizationPda,
+  inventoryRecordFromFilm,
   submitToNodes,
-  assertNodesAgree,
-  resultRecordSchema,
 } from "@spiral-backbone/protocol";
-import { getProgramDerivedAddress } from "@solana/kit";
+import {
+  FILM_PROGRAM_ADDRESS,
+  fetchFilm,
+  getDeclareReplicaInstruction,
+  getRegisterFilmInstruction,
+} from "@spiral-backbone/protocol/generated/film";
 import {
   fetchMaybeMembership,
   MembershipStatus,
   ORGANIZATION_ERROR__MEMBERSHIP_REVOKED,
   Role,
 } from "@spiral-backbone/protocol/generated/organization";
-import {
-  FILM_PROGRAM_ADDRESS,
-  getRegisterFilmInstruction,
-} from "@spiral-backbone/protocol/generated/film";
 import { Command } from "commander";
 import { z } from "zod";
 import { createSpiralClient, resolveRpcUrl } from "../lib/client";
 import { CliError, handleCliError } from "../lib/errors";
+import { assertContentMatchesWork, findManifestWork } from "../lib/manifest";
+
+const MAX_REPLICAS = 8;
 
 export const submitOptionsSchema = z.object({
   org: z.string().min(1),
+  workId: z.string().min(1),
+  manifest: z.string().min(1),
   file: z.string().min(1),
   title: z.string().min(1).max(160),
   replicas: z.string().min(1),
@@ -36,10 +44,46 @@ export const submitOptionsSchema = z.object({
   wsUrl: z.string().optional(),
 });
 
+export function parseReplicaUrls(replicas: string): string[] {
+  const urls = [
+    ...new Set(
+      replicas
+        .split(",")
+        .map((url) => url.trim())
+        .filter((url) => url.length > 0),
+    ),
+  ];
+  if (urls.length === 0) throw new CliError("--replicas must list at least one Kubo RPC URL");
+  if (urls.length > MAX_REPLICAS) {
+    throw new CliError(
+      `at most ${MAX_REPLICAS} replicas can be declared on-chain (got ${urls.length})`,
+    );
+  }
+  return urls;
+}
+
+export function assertDistinctPeers(urls: string[], peers: { peerId: string }[]): void {
+  const byPeer = new Map<string, string[]>();
+  peers.forEach(({ peerId }, i) => byPeer.set(peerId, [...(byPeer.get(peerId) ?? []), urls[i]!]));
+  const collisions = [...byPeer.entries()].filter(([, group]) => group.length > 1);
+  if (collisions.length > 0) {
+    const detail = collisions
+      .map(([peerId, group]) => `${group.join(" and ")} are the same node (${peerId})`)
+      .join("; ");
+    throw new CliError(
+      `--replicas must name distinct IPFS nodes: ${detail}. Each replica is declared on-chain once per PeerID.`,
+    );
+  }
+}
+
 export const submit = new Command()
   .name("submit")
-  .description("submit a film to the declared IPFS nodes and register it on-chain")
+  .description(
+    "submit a film to the declared IPFS nodes, register it and its replicas on-chain, and print its golden inventory line",
+  )
   .requiredOption("--org <slug>", "organization slug")
+  .requiredOption("--work-id <id>", "manifest work_id this file is, e.g. pd-001")
+  .option("--manifest <path>", "dataset manifest", "dataset/manifest.json")
   .requiredOption("--file <path>", "path to the file to submit")
   .requiredOption("--title <title>", "film title (max 160 chars)")
   .requiredOption(
@@ -60,9 +104,14 @@ export const submit = new Command()
   .action(async (opts) => {
     try {
       const options = submitOptionsSchema.parse(opts);
-      const nodeUrls = options.replicas.split(",").map((url) => url.trim());
+      const nodeUrls = parseReplicaUrls(options.replicas);
 
+      const work = await findManifestWork(options.manifest, options.workId);
       const content = await readFile(options.file);
+      const sha256 = assertContentMatchesWork(work, content);
+      const peers = await Promise.all(nodeUrls.map((url) => fetchPeerId(url)));
+      assertDistinctPeers(nodeUrls, peers);
+
       const nodeResults = await submitToNodes(nodeUrls, content);
       const agreedCid = assertNodesAgree(nodeResults);
 
@@ -105,53 +154,53 @@ export const submit = new Command()
         seeds: [new TextEncoder().encode("__event_authority")],
       });
 
-      const instruction = getRegisterFilmInstruction({
-        submitter: client.payer,
-        organization: organizationPda,
-        membership: membershipPda,
-        film: filmPda,
-        eventAuthority,
-        program: FILM_PROGRAM_ADDRESS,
-        cid,
-        cidLen,
-        byteSize: BigInt(content.byteLength),
-        chunkingProfile: 1,
-        title: options.title,
+      const register = await client.sendTransaction([
+        getRegisterFilmInstruction({
+          submitter: client.payer,
+          organization: organizationPda,
+          membership: membershipPda,
+          film: filmPda,
+          eventAuthority,
+          program: FILM_PROGRAM_ADDRESS,
+          cid,
+          cidLen,
+          byteSize: BigInt(content.byteLength),
+          chunkingProfile: 1,
+          title: options.title,
+        }),
+      ]);
+
+      const replicaSignatures: string[] = [];
+      for (const peer of peers) {
+        const declared = await client.sendTransaction([
+          getDeclareReplicaInstruction({
+            film: filmPda,
+            submitter: client.payer,
+            peerId: peer.bytes,
+            peerIdLen: peer.bytes.length,
+          }),
+        ]);
+        replicaSignatures.push(declared.context.signature);
+      }
+
+      const film = await fetchFilm(client.rpc, filmPda);
+      const inventory = inventoryRecordFromFilm({
+        workId: work.work_id,
+        filmPda,
+        film: film.data,
+        sizeBand: work.size_band,
+        sha256,
+        registerSignature: register.context.signature,
+        replicaSignatures,
+        rpcEndpoint: describeEndpoint(resolveRpcUrl(options)).host,
       });
 
-      const startedAt = new Date().toISOString();
-      const { context } = await client.sendTransaction([instruction]);
-      const signature = context.signature;
-      const finishedAt = new Date().toISOString();
-
-      const goldenRecord = resultRecordSchema.parse({
-        run_id: "manual-submit",
-        hypothesis: "H4",
-        film_pda: filmPda,
-        work_id: options.file,
-        size_bytes: content.byteLength,
-        size_band: "unspecified",
-        scenario: "submit",
-        method: "cli",
-        attempt: 1,
-        started_at: startedAt,
-        finished_at: finishedAt,
-        latency_ms: Date.parse(finishedAt) - Date.parse(startedAt),
-        cid_expected: bytesToCidString(cid, cidLen),
-        cid_observed: bytesToCidString(cid, cidLen),
-        outcome: "success",
-        failure_class: null,
-        tx_signature: signature,
-        rpc_endpoint: resolveRpcUrl(options),
-        verifier_impl: "n/a",
-        artifact_versions: {},
-      });
-
-      // Human-readable status goes to stderr; stdout carries only the golden NDJSON record,
-      // so a consumer can pipe stdout straight into a parser without grepping for JSON.
-      console.error(`Film "${options.title}" registered at ${filmPda}.`);
-      console.error(`Transaction: ${signature}`);
-      console.log(JSON.stringify(goldenRecord));
+      // stdout carries only the golden inventory line; human status goes to stderr.
+      console.error(
+        `Film "${options.title}" registered at ${filmPda} with ${peers.length} replica(s).`,
+      );
+      console.error(`Transaction: ${register.context.signature}`);
+      console.log(JSON.stringify(inventory));
     } catch (error) {
       handleCliError(error);
     }

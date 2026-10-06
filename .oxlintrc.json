@@ -10,6 +10,20 @@
   },
   "overrides": [
     {
+      "files": [
+        "**/packages/eval/src/*.ts",
+        "**/packages/eval/src/common/**/*.ts",
+        "**/packages/eval/src/h1/**/*.ts",
+        "**/packages/eval/src/h2/**/*.ts",
+        "**/packages/eval/src/h3/**/*.ts",
+        "**/packages/eval/src/report/**/*.ts",
+        "**/packages/eval/src/testing/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": ["error", "@spiral-backbone/db", "@spiral-backbone/indexer"]
+      }
+    },
+    {
       "files": ["**/packages/eval/verifier/**/*.ts"],
       "rules": {
         "no-restricted-imports": [

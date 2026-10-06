@@ -16,4 +16,7 @@ describe("CLI entrypoints run under tsx", () => {
   it("spiral-indexer --help", () => {
     expect(runEntrypoint("packages/indexer/src/cli.ts", ["--help"])).toContain("backfill");
   }, 30_000);
+  it("spiral-eval --help", () => {
+    expect(runEntrypoint("packages/eval/src/cli.ts", ["--help"])).toContain("spiral-eval");
+  }, 30_000);
 });

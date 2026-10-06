@@ -80,3 +80,64 @@ describe("boundaryRules (project rules)", () => {
     expect(violations[0]).toContain("@spiral-backbone/db");
   });
 });
+
+describe("eval-db-isolation", () => {
+  it("flags an H1 harness file importing the database package", () => {
+    cwd = mkdtempSync(join(tmpdir(), "boundaries-"));
+    mkdirSync(join(cwd, "packages/eval/src/h1"), { recursive: true });
+    writeFileSync(
+      join(cwd, "packages/eval/src/h1/run.ts"),
+      'import { createDb } from "@spiral-backbone/db";\nexport { createDb };\n',
+    );
+    const violations = findViolations(boundaryRules, cwd);
+    expect(violations.some((v) => v.includes("eval-db-isolation"))).toBe(true);
+  });
+
+  it("allows the H4 harness to import the database package", () => {
+    cwd = mkdtempSync(join(tmpdir(), "boundaries-"));
+    mkdirSync(join(cwd, "packages/eval/src/h4"), { recursive: true });
+    writeFileSync(
+      join(cwd, "packages/eval/src/h4/run.ts"),
+      'import { createDb } from "@spiral-backbone/db";\nexport { createDb };\n',
+    );
+    expect(findViolations(boundaryRules, cwd)).toEqual([]);
+  });
+
+  it("flags a future H2 harness file importing the indexer", () => {
+    cwd = mkdtempSync(join(tmpdir(), "boundaries-"));
+    mkdirSync(join(cwd, "packages/eval/src/h2"), { recursive: true });
+    writeFileSync(
+      join(cwd, "packages/eval/src/h2/run.ts"),
+      'import { backfill } from "@spiral-backbone/indexer";\nexport { backfill };\n',
+    );
+    const violations = findViolations(boundaryRules, cwd);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("packages/eval/src/h2/run.ts");
+    expect(violations[0]).toContain("eval-db-isolation");
+  });
+
+  it("flags a top-level eval source file importing the database package", () => {
+    cwd = mkdtempSync(join(tmpdir(), "boundaries-"));
+    mkdirSync(join(cwd, "packages/eval/src"), { recursive: true });
+    writeFileSync(
+      join(cwd, "packages/eval/src/x.ts"),
+      'import { createDb } from "@spiral-backbone/db";\nexport { createDb };\n',
+    );
+    const violations = findViolations(boundaryRules, cwd);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("packages/eval/src/x.ts");
+  });
+});
+
+describe("rule exclusions", () => {
+  it("skips files matching an exclude glob", () => {
+    cwd = mkdtempSync(join(tmpdir(), "boundaries-"));
+    mkdirSync(join(cwd, "src/allowed"), { recursive: true });
+    const source = 'import { x } from "@forbidden/package";\nexport { x };\n';
+    writeFileSync(join(cwd, "src/a.ts"), source);
+    writeFileSync(join(cwd, "src/allowed/b.ts"), source);
+    const violations = findViolations([{ ...testRule, exclude: ["src/allowed/**"] }], cwd);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("src/a.ts");
+  });
+});

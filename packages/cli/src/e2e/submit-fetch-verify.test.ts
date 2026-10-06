@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fetchPeerId, inventoryRecordSchema } from "@spiral-backbone/protocol";
 import { createClient, lamports } from "@solana/kit";
 import { signerFromFile } from "@solana/kit-plugin-signer";
 import { surfpool } from "@solana/surfpool/kit";
@@ -138,14 +140,21 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
       { from: "user" },
     );
 
+    const content = new TextEncoder().encode("spiral e2e content");
     const filePath = join(workDir, "content.bin");
-    writeFileSync(filePath, new TextEncoder().encode("spiral e2e content"));
+    writeFileSync(filePath, content);
+    const manifestPath = join(workDir, "manifest.json");
+    writeManifest(manifestPath, "pd-901", content);
 
     const submitOutput = await captureConsole(() =>
       submit.parseAsync(
         [
           "--org",
           slug,
+          "--work-id",
+          "pd-901",
+          "--manifest",
+          manifestPath,
           "--file",
           filePath,
           "--title",
@@ -164,8 +173,21 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
         { from: "user" },
       ),
     );
-    const goldenRecord = JSON.parse(submitOutput.trim()) as { film_pda: string };
-    const filmPda = goldenRecord.film_pda;
+    const inventory = inventoryRecordSchema.parse(JSON.parse(submitOutput.trim()));
+    const filmPda = inventory.film_pda;
+    const kuboPeer = await fetchPeerId(kubo.apiUrl);
+    expect(inventory.work_id).toBe("pd-901");
+    expect(inventory.replica_count).toBe(1);
+    expect(inventory.replicas).toEqual([
+      {
+        slot: 0,
+        peer_id_hex: Buffer.from(kuboPeer.bytes).toString("hex"),
+        peer_id_len: 38,
+        declared_at: expect.stringMatching(/^\d+$/),
+        active: true,
+      },
+    ]);
+    expect(inventory.replica_signatures).toHaveLength(1);
 
     const outDir = join(workDir, "recovered");
     await fetch_.parseAsync(
@@ -234,7 +256,10 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
     await surfnet.airdrop(strangerClient.payer.address, lamports(10_000_000_000n));
 
     const filePath = join(workDir, "stranger-content.bin");
-    writeFileSync(filePath, new TextEncoder().encode("should be rejected before any tx"));
+    const strangerContent = new TextEncoder().encode("should be rejected before any tx");
+    writeFileSync(filePath, strangerContent);
+    const strangerManifestPath = join(workDir, "stranger-manifest.json");
+    writeManifest(strangerManifestPath, "pd-902", strangerContent);
 
     // handleCliError calls process.exit(1) — mock it to throw instead so the rejection is
     // observable, and capture console.error to inspect the message it wrote.
@@ -248,6 +273,10 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
           [
             "--org",
             strangerSlug,
+            "--work-id",
+            "pd-902",
+            "--manifest",
+            strangerManifestPath,
             "--file",
             filePath,
             "--title",
@@ -291,4 +320,20 @@ async function captureConsole(run: () => Promise<unknown>): Promise<string> {
     console.log = original;
   }
   return lines.join("\n");
+}
+
+function writeManifest(path: string, workId: string, content: Uint8Array): void {
+  writeFileSync(
+    path,
+    JSON.stringify({
+      works: [
+        {
+          work_id: workId,
+          size_bytes: content.byteLength,
+          size_band: "small",
+          sha256: createHash("sha256").update(content).digest("hex"),
+        },
+      ],
+    }),
+  );
 }

@@ -1,4 +1,5 @@
 import { create } from "kubo-rpc-client";
+import { base58btc } from "multiformats/bases/base58";
 import { CID } from "multiformats/cid";
 
 /** Uploads `content` to every node in `nodeUrls` independently, using the Spiral Chunking
@@ -36,4 +37,27 @@ export function assertNodesAgree(results: Map<string, CID>): CID {
   }
   const [, cid] = [...results.entries()][0]!;
   return cid;
+}
+
+export const ED25519_PEER_ID_LENGTH = 38;
+
+const ED25519_IDENTITY_HEADER = [0x00, 0x24, 0x08, 0x01, 0x12, 0x20];
+
+export function peerIdToBytes(peerId: string): Uint8Array {
+  const bytes = base58btc.baseDecode(peerId);
+  if (
+    bytes.length !== ED25519_PEER_ID_LENGTH ||
+    ED25519_IDENTITY_HEADER.some((byte, i) => bytes[i] !== byte)
+  ) {
+    throw new Error(
+      `peer ID ${peerId} is not an Ed25519 identity multihash (ADR-04 requires 38 bytes starting 00 24 08 01 12 20)`,
+    );
+  }
+  return bytes;
+}
+
+export async function fetchPeerId(nodeUrl: string): Promise<{ peerId: string; bytes: Uint8Array }> {
+  const { id } = await create({ url: nodeUrl }).id();
+  const peerId = id.toString();
+  return { peerId, bytes: peerIdToBytes(peerId) };
 }

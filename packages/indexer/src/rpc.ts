@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+export { describeEndpoint } from "@spiral-backbone/protocol";
 import {
   createDefaultRpcTransport,
   createSolanaRpcFromTransport,
@@ -51,8 +51,3 @@ export function createIndexerRpc(url: string, options: IndexerRpcOptions = {}) {
 }
 
 export type IndexerRpc = ReturnType<typeof createIndexerRpc>["rpc"];
-
-export function describeEndpoint(url: string): { host: string; fingerprint: string } {
-  const digest = createHash("sha256").update(url).digest("hex").slice(0, 12);
-  return { host: new URL(url).host, fingerprint: `sha256:${digest}` };
-}

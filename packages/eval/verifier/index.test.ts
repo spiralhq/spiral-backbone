@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeSpiralCid } from "./index";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { computeSpiralCid, computeSpiralCidFromFile } from "./index";
 
 describe("computeSpiralCid", () => {
   it("produces a CIDv1 with a raw codec for content smaller than one chunk", async () => {
@@ -23,5 +27,25 @@ describe("computeSpiralCid", () => {
     const cidA = await computeSpiralCid(content);
     const cidB = await computeSpiralCid(content);
     expect(cidA.toString()).toBe(cidB.toString());
+  });
+});
+
+describe("computeSpiralCidFromFile", () => {
+  const dir = mkdtempSync(join(tmpdir(), "verifier-stream-"));
+
+  it.each([1, 262_143, 262_144, 262_145, 5 * 262_144 + 12_345])(
+    "matches the in-memory CID for a %i-byte file",
+    async (size) => {
+      const content = randomBytes(size);
+      const path = join(dir, `f-${size}.bin`);
+      writeFileSync(path, content);
+      expect((await computeSpiralCidFromFile(path)).toString()).toBe(
+        (await computeSpiralCid(content)).toString(),
+      );
+    },
+  );
+
+  it("rejects a missing file", async () => {
+    await expect(computeSpiralCidFromFile(join(dir, "absent.bin"))).rejects.toThrow();
   });
 });

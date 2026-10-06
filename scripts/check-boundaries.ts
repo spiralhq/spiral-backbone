@@ -1,8 +1,10 @@
 import { globSync, readFileSync } from "node:fs";
+import { matchesGlob } from "node:path";
 
 export interface BoundaryRule {
   name: string;
   glob: string;
+  exclude?: string[];
   forbidden: string[];
 }
 
@@ -17,6 +19,12 @@ export const boundaryRules: BoundaryRule[] = [
       "helia",
       "../src",
     ],
+  },
+  {
+    name: "eval-db-isolation",
+    glob: "packages/eval/src/**/*.ts",
+    exclude: ["packages/eval/src/h4/**"],
+    forbidden: ["@spiral-backbone/db", "@spiral-backbone/indexer"],
   },
   {
     name: "cli-fetch-isolation",
@@ -46,7 +54,9 @@ const IMPORT_RE =
 export function findViolations(rules: BoundaryRule[], cwd: string = process.cwd()): string[] {
   const violations: string[] = [];
   for (const rule of rules) {
-    const files = globSync(rule.glob, { cwd });
+    const files = globSync(rule.glob, { cwd }).filter(
+      (file) => !(rule.exclude ?? []).some((pattern) => matchesGlob(file, pattern)),
+    );
     for (const file of files) {
       const source = readFileSync(`${cwd}/${file}`, "utf8");
       for (const match of source.matchAll(IMPORT_RE)) {
