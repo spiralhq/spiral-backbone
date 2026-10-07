@@ -48,6 +48,15 @@ async function runSsh(target: SshTarget, remoteCommand: string): Promise<string>
   return stdout.trim();
 }
 
+export async function assertSshReachable(target: SshTarget): Promise<void> {
+  try {
+    await runSsh(target, "true");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`SSH to ${target.host}:${target.port} failed: ${message}`);
+  }
+}
+
 export async function startService(target: SshTarget, serviceName = "ipfs"): Promise<void> {
   await runSsh(target, `sudo systemctl start ${serviceName}`);
 }

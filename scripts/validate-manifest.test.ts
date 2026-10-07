@@ -27,6 +27,7 @@ function work(overrides: Record<string, unknown> = {}) {
     duration_seconds: 554.95,
     size_bytes: TWENTY_MB,
     size_band: "small",
+    cold_cid: false,
     sha256: zerosSha256,
     placeholder: true,
     ...overrides,
@@ -188,5 +189,22 @@ describe("validate-manifest CLI", () => {
     const result = run(link, ["--manifest", malformedManifest()]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("as JSON");
+  });
+});
+
+describe("cold_cid", () => {
+  it("is required on every work", async () => {
+    const incomplete: Record<string, unknown> = work();
+    delete incomplete["cold_cid"];
+    const { errors } = await validateManifest(manifest([incomplete]), { filesDir, final: false });
+    expect(errors.some((error) => error.startsWith("works[0].cold_cid"))).toBe(true);
+  });
+
+  it("--final requires exactly 5 cold CIDs", async () => {
+    const { errors } = await validateManifest(manifest([work({ cold_cid: true })]), {
+      filesDir,
+      final: true,
+    });
+    expect(errors).toContain("final manifest must have 5 cold_cid works, has 1");
   });
 });

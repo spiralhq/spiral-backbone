@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  assertSshReachable,
   checkStatus,
   shutdownService,
   startService,
@@ -78,6 +79,11 @@ describe("kubo-node-control (SSH end-to-end via Docker)", () => {
     const status = await checkStatus(target, swarmPort, "stand-in");
     expect(status).toEqual({ systemdActive: false, swarmReachable: false });
   }, 15_000);
+
+  it("asserts SSH reachability, and rejects for a closed port", async () => {
+    await expect(assertSshReachable(target)).resolves.toBeUndefined();
+    await expect(assertSshReachable({ ...target, port: 1 })).rejects.toThrow(/SSH to .*:1 failed/);
+  }, 30_000);
 
   it("starts the service back up and both checks flip to true again", async () => {
     await startService(target, "stand-in");

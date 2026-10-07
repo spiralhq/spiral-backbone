@@ -26,6 +26,7 @@ function golden(overrides: Partial<InventoryRecord> = {}): InventoryRecord {
     schema_version: 1,
     bump: 252,
     size_band: "small",
+    cold_cid: false,
     sha256: "0".repeat(64),
     register_signature: "sig",
     replica_signatures: ["sig-r"],

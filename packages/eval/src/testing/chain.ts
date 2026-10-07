@@ -58,7 +58,11 @@ export interface LocalChain {
 export async function startLocalChain(): Promise<LocalChain> {
   const surfnet = await createClient().use(surfpool({ surfnet: { offline: true } }));
   const workDir = mkdtempSync(join(tmpdir(), "spiral-eval-e2e-"));
+  // Undrained simnet events stall the surfnet after ~1000 slots; see docs/solana-kit-notes.md.
+  const drain = setInterval(() => surfnet.surfnet.drainEvents(), 1_000);
+  drain.unref();
   const stop = () => {
+    clearInterval(drain);
     try {
       surfnet.surfnet.stop();
     } finally {

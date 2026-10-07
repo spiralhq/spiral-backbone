@@ -138,9 +138,133 @@ describe("generateReport", () => {
     const results = mkdtempSync(join(tmpdir(), "report-in-"));
     const out = mkdtempSync(join(tmpdir(), "report-out-"));
     const { markdownPath, csvPaths } = await generateReport({ resultsDir: results, outDir: out });
-    expect(readFileSync(markdownPath, "utf8").match(/No results\./g)).toHaveLength(3);
+    expect(readFileSync(markdownPath, "utf8").match(/No results\./g)).toHaveLength(4);
     expect(csvPaths).toEqual([]);
     expect(existsSync(join(out, "h1.csv"))).toBe(false);
+  });
+});
+
+describe("H2 section", () => {
+  it("emits the H2 section with status line and CSVs", async () => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const out = mkdtempSync(join(tmpdir(), "report-out-"));
+    const run = "2026-10-06T12:00:00Z-h2-a";
+    const block = (generation: number, confirmed: boolean) => ({
+      run_id: run,
+      block_index: 0,
+      block_name: "replicas=1",
+      generation,
+      phase: "end",
+      check_number: generation,
+      intended_active: ["r1"],
+      observed: [],
+      missing_providers: {},
+      confirmed,
+      reasons: [],
+      at: "t",
+    });
+    const h2 = (o: Partial<ResultRecord>) =>
+      rec({ run_id: run, hypothesis: "H2", scenario: "replicas=1@g2", method: "direct", ...o });
+    writeFileSync(
+      join(results, "h2.ndjson"),
+      lines([
+        h2({ scenario: "replicas=1@g1", outcome: "failure", failure_class: "timeout" }),
+        h2({ latency_ms: 400 }),
+      ]),
+    );
+    writeFileSync(join(results, "h2-blocks.ndjson"), lines([block(1, false), block(2, true)]));
+    writeFileSync(
+      join(results, "h2.runs.ndjson"),
+      lines([
+        { run_id: run, status: "started", expected_attempts: 1, started_at: "t" },
+        { run_id: run, status: "completed", recorded_attempts: 2, finished_at: "t" },
+      ]),
+    );
+    const { markdownPath, csvPaths } = await generateReport({ resultsDir: results, outDir: out });
+    const md = readFileSync(markdownPath, "utf8");
+    expect(md).toContain("## H2");
+    expect(md).toContain("| replicas=1 | direct | 1 | 1 | 0 | 100.0% |");
+    expect(md).toContain(
+      "Status: complete (2/1 attempts)\n\nAttempts included: 1 of 1 planned (2 recorded, including re-run generations)\n",
+    );
+    expect(md).toContain("Attempts excluded (end-of-block replica state not confirmed): 1");
+    expect(md).not.toContain("no end-of-block state check recorded");
+    expect(md).not.toContain("this refutes H2");
+    expect(csvPaths.map((p) => p.split("/").pop()).sort()).toEqual([
+      "h2-latency.csv",
+      "h2-rates.csv",
+    ]);
+  });
+});
+
+describe("H2 flags", () => {
+  const run = "2026-10-06T12:00:00Z-h2-b";
+  const block = (name: string, index: number, intended: string[]) => ({
+    run_id: run,
+    block_index: index,
+    block_name: name,
+    generation: 1,
+    phase: "end",
+    check_number: 1,
+    intended_active: intended,
+    observed: [],
+    missing_providers: {},
+    confirmed: true,
+    reasons: [],
+    at: "t",
+  });
+  const h2 = (o: Partial<ResultRecord>) =>
+    rec({ run_id: run, hypothesis: "H2", method: "direct", ...o });
+  const build = async (records: ResultRecord[], marks: unknown[]) => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const out = mkdtempSync(join(tmpdir(), "report-out-"));
+    writeFileSync(join(results, "h2.ndjson"), lines(records));
+    writeFileSync(
+      join(results, "h2-blocks.ndjson"),
+      lines([block("replicas=1", 0, ["r1"]), block("replicas=0", 1, [])]),
+    );
+    writeFileSync(join(results, "h2.runs.ndjson"), lines(marks));
+    const { markdownPath } = await generateReport({ resultsDir: results, outDir: out });
+    return readFileSync(markdownPath, "utf8");
+  };
+  const started = { run_id: run, status: "started", expected_attempts: 3, started_at: "t" };
+
+  it("prints the refutation line for a confirmed zero-replica direct success", async () => {
+    const md = await build([h2({ scenario: "replicas=0@g1" })], [started]);
+    expect(md).toContain("**Direct success with zero active replicas: 1** — this refutes H2.\n");
+    expect(md).not.toContain("Zero-replica control contaminated");
+  });
+
+  it("prints the contamination line for a zero-replica direct external_cache, alongside the refutation", async () => {
+    const cache = h2({
+      scenario: "replicas=0@g1",
+      attempt: 2,
+      outcome: "failure",
+      failure_class: "external_cache",
+    });
+    const md = await build([cache], [started]);
+    const line =
+      "**Zero-replica control contaminated: 1 direct recoveries from undeclared sources** — does not refute H2; the zero-replica control is weakened.\n";
+    expect(md).toContain(line);
+    expect(md).not.toContain("this refutes H2");
+    const both = await build([h2({ scenario: "replicas=0@g1" }), cache], [started]);
+    expect(both).toContain(line);
+    expect(both).toContain("**Direct success with zero active replicas: 1** — this refutes H2.\n");
+  });
+
+  it("reports included attempts in the INCOMPLETE status and prints the no-end exclusion", async () => {
+    const md = await build(
+      [h2({ scenario: "replicas=1@g1" }), h2({ scenario: "replicas=1@g9" })],
+      [started],
+    );
+    expect(md).toContain(
+      "Status: **INCOMPLETE** — run did not finish (1 of 3 expected attempts included)",
+    );
+    expect(md).toContain(
+      "Attempts included: 1 of 3 planned (2 recorded, including re-run generations)",
+    );
+    expect(md).toContain("Attempts excluded (no end-of-block state check recorded): 1");
+    expect(md).not.toContain("this refutes H2");
   });
 });
 

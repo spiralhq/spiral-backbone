@@ -2,6 +2,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ResultRecord } from "@spiral-backbone/protocol";
 import { sidecarPath } from "../common/sidecar";
+import { blocksPath, readBlockRecords } from "../h2/blocks-log";
+import {
+  H2_FAILURE_HEADERS,
+  H2_LATENCY_HEADERS,
+  H2_RATE_HEADERS,
+  h2AttemptsLine,
+  summarizeH2,
+} from "./h2";
 import { loadH3Evidence, loadH4Run, loadResults, loadRunStatus } from "./load";
 import { csv, markdownTable } from "./render";
 import {
@@ -28,7 +36,7 @@ const onlyRun = (records: ResultRecord[], runId: string | undefined) =>
 export async function generateReport(options: {
   resultsDir: string;
   outDir: string;
-  runIds?: { h1?: string; h3?: string; h4?: string };
+  runIds?: { h1?: string; h2?: string; h3?: string; h4?: string };
 }): Promise<{ markdownPath: string; csvPaths: string[] }> {
   await mkdir(options.outDir, { recursive: true });
   const csvPaths: string[] = [];
@@ -55,6 +63,54 @@ export async function generateReport(options: {
       markdownTable(H1_HEADERS, rows),
     );
     await emitCsv("h1.csv", H1_HEADERS, rows);
+  }
+
+  const h2Path = join(options.resultsDir, "h2.ndjson");
+  const h2All = await loadResults(h2Path);
+  const h2Run = options.runIds?.h2 ?? latestRunId(h2All);
+  parts.push(`## H2 — Recuperabilidade a partir do registro\n`);
+  if (h2All.length === 0) parts.push("No results.\n");
+  else {
+    const summary = summarizeH2(h2All, await readBlockRecords(blocksPath(h2Path)), h2Run!);
+    const marks = await loadRunStatus(sidecarPath(h2Path, "runs"));
+    const started = marks.find((m) => m.run_id === h2Run && m.status === "started");
+    const planned = started?.status === "started" ? started.expected_attempts : undefined;
+    parts.push(
+      `Run: \`${h2Run}\`\n`,
+      statusLine(marks, h2Run!, summary.included, "included"),
+      h2AttemptsLine(summary.included, planned, onlyRun(h2All, h2Run).length),
+    );
+    if (summary.excludedUnconfirmed > 0)
+      parts.push(
+        `Attempts excluded (end-of-block replica state not confirmed): ${summary.excludedUnconfirmed}\n`,
+      );
+    if (summary.excludedNoEnd > 0)
+      parts.push(
+        `Attempts excluded (no end-of-block state check recorded): ${summary.excludedNoEnd}\n`,
+      );
+    if (summary.directSuccessAtZero > 0) {
+      parts.push(
+        `**Direct success with zero active replicas: ${summary.directSuccessAtZero}** — this refutes H2.\n`,
+      );
+    }
+    if (summary.directCacheAtZero > 0) {
+      parts.push(
+        `**Zero-replica control contaminated: ${summary.directCacheAtZero} direct recoveries from undeclared sources** — does not refute H2; the zero-replica control is weakened.\n`,
+      );
+    }
+    parts.push(
+      markdownTable(H2_RATE_HEADERS, summary.rateRows),
+      "\n",
+      summary.latencyRows.length === 0
+        ? "No successful attempts.\n"
+        : markdownTable(H2_LATENCY_HEADERS, summary.latencyRows),
+      "\n",
+      summary.failureRows.length === 0
+        ? "No failures.\n"
+        : markdownTable(H2_FAILURE_HEADERS, summary.failureRows),
+    );
+    await emitCsv("h2-rates.csv", H2_RATE_HEADERS, summary.rateRows);
+    await emitCsv("h2-latency.csv", H2_LATENCY_HEADERS, summary.latencyRows);
   }
 
   const h3Path = join(options.resultsDir, "h3.ndjson");

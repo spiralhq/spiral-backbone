@@ -9,7 +9,8 @@ if [ ! -f "$IPFS_PATH/config" ]; then
 fi
 
 ipfs config --json Routing '{"Type":"dhtserver","AcceleratedDHTClient":true}'
-ipfs config --json Reprovider '{"Strategy":"pinned","Interval":"12h"}'
+ipfs config --json Provide '{"Strategy":"pinned","DHT":{"Interval":"12h"}}'
+ipfs config --json Reprovider null
 ipfs config --json Swarm.ConnMgr '{"Type":"basic","LowWater":200,"HighWater":600}'
 ipfs config --json Datastore.GCPeriod '"0"'
 

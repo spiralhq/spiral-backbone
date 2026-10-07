@@ -33,6 +33,7 @@ export const inventoryRecordSchema = z
     schema_version: z.number().int(),
     bump: z.number().int(),
     size_band: z.enum(["small", "medium", "large"]),
+    cold_cid: z.boolean(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     register_signature: z.string().min(1),
     replica_signatures: z.array(z.string()),
@@ -49,6 +50,7 @@ export function inventoryRecordFromFilm(input: {
   filmPda: string;
   film: Film;
   sizeBand: "small" | "medium" | "large";
+  coldCid: boolean;
   sha256: string;
   registerSignature: string;
   replicaSignatures: string[];
@@ -79,6 +81,7 @@ export function inventoryRecordFromFilm(input: {
     schema_version: film.schemaVersion,
     bump: film.bump,
     size_band: input.sizeBand,
+    cold_cid: input.coldCid,
     sha256: input.sha256,
     register_signature: input.registerSignature,
     replica_signatures: input.replicaSignatures,

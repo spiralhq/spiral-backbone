@@ -12,9 +12,10 @@ explains how the underlying code works.
 Docker image this is tested against, and some minimal VPS base images,
 don't ship bash): it runs `ipfs init --profile server --algorithm ed25519`
 only if `$IPFS_PATH/config` doesn't already exist, then unconditionally
-re-applies four `ipfs config --json` calls (`Routing.Type=dhtserver` +
-`AcceleratedDHTClient` to keep DHT provider records fresh, `Reprovider.Strategy=pinned`
-so only pinned content gets reannounced, `Swarm.ConnMgr` bounds, and
+re-applies five `ipfs config --json` calls (`Routing.Type=dhtserver` +
+`AcceleratedDHTClient` to keep DHT provider records fresh, `Provide.Strategy=pinned`
+with `Provide.DHT.Interval` so only pinned content gets reannounced, `Reprovider=null`
+because Kubo 0.43.1 refuses to start with the deprecated key, `Swarm.ConnMgr` bounds, and
 `Datastore.GCPeriod="0"` so GC never runs mid-campaign) — safe to run twice
 because `ipfs config` writes are naturally idempotent.
 
@@ -24,7 +25,8 @@ systemd (`Type=simple`, `--enable-gc=false` matching the config above).
 Both are tested against a real `ipfs/kubo:v0.43.1` container in
 `scripts/kubo-setup.test.ts` — the script is run twice inside one container
 and the final `ipfs config show` output is asserted against, proving
-idempotency for real rather than by inspection.
+idempotency for real rather than by inspection. The setup test also starts
+the daemon, because a config that only parses is not proof the node runs.
 
 ## Control agent (`scripts/kubo-node-control.ts`)
 

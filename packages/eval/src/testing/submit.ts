@@ -44,6 +44,7 @@ export async function submitForTest(input: {
   content: Uint8Array;
   title: string;
   kuboUrls: string[];
+  coldCid?: boolean;
 }): Promise<InventoryRecord> {
   const filePath = join(input.chain.workDir, `${input.workId}.bin`);
   writeFileSync(filePath, input.content);
@@ -56,6 +57,7 @@ export async function submitForTest(input: {
           work_id: input.workId,
           size_bytes: input.content.byteLength,
           size_band: "small",
+          cold_cid: input.coldCid ?? false,
           sha256: createHash("sha256").update(input.content).digest("hex"),
         },
       ],

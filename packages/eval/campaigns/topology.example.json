@@ -1,0 +1,52 @@
+{
+  "topology_version": 1,
+  "replicas": [
+    {
+      "name": "a",
+      "peer_id": "12D3KooW…node-a",
+      "service": "ipfs",
+      "ssh": {
+        "host": "node-a.example",
+        "port": 22,
+        "user": "spiral",
+        "identity_file": "~/.ssh/spiral-node-control",
+        "insecure_host_key_checking": false
+      }
+    },
+    {
+      "name": "b",
+      "peer_id": "12D3KooW…node-b",
+      "service": "ipfs",
+      "ssh": {
+        "host": "node-b.example",
+        "port": 22,
+        "user": "spiral",
+        "identity_file": "~/.ssh/spiral-node-control",
+        "insecure_host_key_checking": false
+      }
+    },
+    {
+      "name": "c",
+      "peer_id": "12D3KooW…node-c",
+      "service": "ipfs",
+      "ssh": {
+        "host": "node-c.example",
+        "port": 22,
+        "user": "spiral",
+        "identity_file": "~/.ssh/spiral-node-control",
+        "insecure_host_key_checking": false
+      }
+    }
+  ],
+  "network_node": { "api_url": "http://127.0.0.1:15001", "bootstrap_multiaddr": null },
+  "gateway_url": "https://ipfs.io",
+  "rpc_url": "https://dedicated-devnet-rpc.example/<api-key>",
+  "executor": {
+    "image": "spiral-h2-executor:dev",
+    "docker_network": null,
+    "add_hosts": [],
+    "swarm_key_path": null,
+    "block_cidrs": ["<submission machine IP>/32"],
+    "repo_root": "/path/to/spiral-backbone"
+  }
+}

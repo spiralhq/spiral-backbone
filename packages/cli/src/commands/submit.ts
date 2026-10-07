@@ -189,6 +189,7 @@ export const submit = new Command()
         filmPda,
         film: film.data,
         sizeBand: work.size_band,
+        coldCid: work.cold_cid,
         sha256,
         registerSignature: register.context.signature,
         replicaSignatures,

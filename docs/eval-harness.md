@@ -1,17 +1,19 @@
-# Evaluation harness (Phase 5a: H1, H3, H4, report)
+# Evaluation harness (Phase 5: H1–H4, report)
 
 `packages/eval` turns the hypotheses into commands. Each writes one NDJSON line per attempt, validated
 against the frozen schema in `packages/protocol/src/results.ts`, plus a sidecar for data the schema
-has no field for. H2 (Phase 5b) is documented separately.
+has no field for.
 
-| Command                                                                                   | Output                                                               | Sidecar                                                                                      |
-| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `npm run eval:h1 -- --golden results/inventory-golden.ndjson`                             | `results/h1.ndjson`                                                  | `h1.evidence.ndjson` (tamper offset/bytes, mismatch diagnosis, retrieval errors)             |
-| `npm run eval:h3`                                                                         | `results/h3.ndjson`                                                  | `h3.evidence.ndjson` (observed code, instruction index, refusing program, full program logs) |
-| `npm run eval:h4 -- --golden results/inventory-golden.ndjson --database-url postgres://…` | `results/h4.ndjson`                                                  | `h4.run.json` (backfill report, counts, missing organizations, field diffs)                  |
-| `npm run eval:report`                                                                     | `results/report/report.md`, `h1.csv`, `h3.csv`, `h4-divergences.csv` | —                                                                                            |
+| Command                                                                                   | Output                                                                                                 | Sidecar                                                                                      |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `npm run eval:h1 -- --golden results/inventory-golden.ndjson`                             | `results/h1.ndjson`                                                                                    | `h1.evidence.ndjson` (tamper offset/bytes, mismatch diagnosis, retrieval errors)             |
+| `npm run eval:h2 -- plan --campaign … --golden …`                                         | `plans/h2-<run_id>.json` (frozen plan)                                                                 | —                                                                                            |
+| `npm run eval:h2 -- run --plan … --topology …` (or `--resume <run_id>`)                   | `results/h2.ndjson`, `results/h2-blocks.ndjson`                                                        | `h2.evidence.ndjson` (attempt_id, generation, provenance, gateway headers), `h2.runs.ndjson` |
+| `npm run eval:h3`                                                                         | `results/h3.ndjson`                                                                                    | `h3.evidence.ndjson` (observed code, instruction index, refusing program, full program logs) |
+| `npm run eval:h4 -- --golden results/inventory-golden.ndjson --database-url postgres://…` | `results/h4.ndjson`                                                                                    | `h4.run.json` (backfill report, counts, missing organizations, field diffs)                  |
+| `npm run eval:report`                                                                     | `results/report/report.md`, `h1.csv`, `h2-rates.csv`, `h2-latency.csv`, `h3.csv`, `h4-divergences.csv` | —                                                                                            |
 
-`run_id` = `<ISO second>Z-<h1|h3|h4>-<label>`. The report shows the latest run per hypothesis.
+`run_id` = `<ISO second>Z-<h1|h2|h3|h4>-<label>`. The report shows the latest run per hypothesis.
 
 Every command also appends to `<out>.runs.ndjson` (for example `results/h3.runs.ndjson`): a
 `started` line with `expected_attempts` before any work, and a `completed` line with
@@ -48,6 +50,10 @@ Collect those lines into `results/inventory-golden.ndjson`: that file is the onl
 If replicas are later deactivated on-chain, the golden no longer matches. H4 then reports
 `filmReplicas.active` divergences, which is correct behavior and not a bug.
 
+**Older goldens.** Golden lines captured before H2 have no `cold_cid` and no longer parse. Re-run
+submit to regenerate them. No default is applied, on purpose: guessing `cold_cid` could let a
+cold work through the gateway before the zero-replica block.
+
 **Partial submit.** `register_film` and each `declare_replica` are separate transactions. If a
 `declare_replica` fails after `register_film` confirmed, the film exists on-chain but no golden line
 was printed, and re-submitting the same file to the same organization fails (duplicate CID: the
@@ -79,6 +85,249 @@ unreachable node, an RPC 429 or 5xx (`connection_error`), or a missing object or
 (`object_unavailable`). A local I/O fault while writing the retrieved file (ENOSPC, EACCES, EROFS,
 EMFILE, EISDIR, or a failed open/write) and an RPC 4xx other than 429 (401/403/404 from a
 misconfigured endpoint) abort the run with exit 1.
+
+## H2
+
+H2 has four parts:
+
+1. **Frozen plan.** `eval:h2 plan` expands a campaign spec and the golden inventory into
+   `plans/h2-<run_id>.json`. The file is written once and never overwritten. Every attempt has a
+   deterministic `attempt_id` = `<block>/<work_id>/<method>/r<repetition>`, a `timeout_ms` of
+   `base_ms + ceil(bytes / 1,000,000) × per_mb_ms`, and a `gateway_eligible` flag.
+2. **Orchestrator.** `eval:h2 run` walks the blocks in plan order. It applies each block's replica
+   state, checks it, runs the attempts, and checks it again.
+3. **Executor.** Each attempt runs in its own `docker run --rm` container and prints exactly one
+   JSON line `{ record, evidence }`.
+4. **Report.** The H2 section of `eval:report`; see below.
+
+A record's `scenario` is `<block>@g<generation>` (e.g. `replicas=1@g1`), and `attempt` is the
+repetition. The `attempt_id` is not in the frozen results schema: it lives in the plan and in the
+evidence sidecar. `tx_signature` is `null`.
+
+**Campaign spec.** It lists `replica_nodes`, `stabilization_ms`, `max_gate_attempts`,
+`max_block_generations`, `timeout` and the `blocks` (`main`, `cold-start` or `degradation`, with
+`active_replicas`, `methods`, `works` = `all | cold | warm | [work_id…]` and `repetitions`). The
+degradation blocks must be contiguous and nested, with exactly `N, N-1, …, 0` active replicas in
+that order. Any other shape is rejected. Only degradation blocks may have zero active replicas.
+Duplicate `attempt_id`s (e.g. from a duplicate `work_id`) abort `plan`.
+
+**Cold CIDs.** A gateway attempt on a `cold_cid` work in any block before the first zero-replica
+block would warm the public cache. `plan` refuses it (`ColdCidViolation`) and writes no plan. The
+executor also refuses (exit 3) a gateway attempt whose `gateway_eligible` is false, and the run
+aborts.
+
+### Replica state
+
+State is never assumed:
+
+- A node is **observed active** only if `systemctl is-active` over SSH and `ipfs ping` from the
+  network node agree.
+- The intended state is **confirmed** only if every node's two checks match the intention **and**
+  `findprovs` from the network node lists every intended-active replica for every CID of the
+  block. `findprovs` never proves a node is **off**: stale provider records outlive the node, so
+  the ping does that.
+- A probe that cannot answer is a harness fault, never "off". Before trusting a node as off, the
+  check asserts that the network node API is alive and that the node answers SSH.
+
+Each block goes through these steps:
+
+1. **Gate.** Apply the state, sleep `stabilization_ms`, check. Repeat up to `max_gate_attempts`
+   times until the check is confirmed.
+2. Run the attempts.
+3. **End re-check.** If the state drifted, the end record says `confirmed: false`, nothing is
+   deleted, and the block runs again as generation `g+1` with a new `scenario`.
+
+Every check is a line in `h2-blocks.ndjson` (`phase` = `gate | end`, `check_number`, the observed
+nodes, `missing_providers`, `confirmed`, `reasons`, `at`). A generation is **valid** only if its
+last `end` record is confirmed. After the last block, every replica is turned back on.
+
+### Executor
+
+- **Fresh node.** Each attempt gets a fresh repo with `Provide.Enabled=false`,
+  `Routing.Type=dhtclient`, `HTTPRetrieval.Enabled=false` and `Discovery.MDNS.Enabled=false`. It
+  is bootstrapped only to `bootstrap_multiaddr` (the network node in the dry run) or to the public
+  defaults, **never to the replicas**.
+- **Firewall.** `block_cidrs` are rejected with `iptables` inside the container, so the
+  submission machine cannot serve the content.
+- **Registry read.** The executor reads the Film account itself from `film_pda` + `rpc_url`. It
+  takes the CID and the declared active PeerIDs from it, and uses no local index or service.
+- **Retrieval.** `direct` runs `ipfs cat`. `gateway` uses HTTP and records the status and cache
+  headers. Either way, the CID is then recomputed with the isolated verifier.
+- **Exit codes.** 0 = attempt recorded, success or failure. 3 = refused (cold CID). 2 = harness
+  fault.
+
+**Verdict.** The executor applies these rules in order:
+
+1. A retrieval error gives its class: `timeout`, `object_unavailable`, `connection_error` or
+   `gateway_failure`.
+2. A different CID gives `cid_mismatch`.
+3. A `gateway` hit with zero active replicas gives `external_cache`.
+4. A `direct` success must pass the provenance rule below; otherwise it is `external_cache`.
+
+**Direct provenance.** After `cat`, the executor reads the bitswap ledger of every peer in the
+union of `swarm peers` and the `bitswap stat --verbose` peers. Each peer is marked declared or
+undeclared against the Film account. A direct attempt is a success only if all three hold:
+
+- `DataReceived` > 0;
+- zero ledger bytes came from undeclared peers;
+- the declared ledger total is at least the `dag stat --offline` size of the file.
+
+`DataReceived` itself is not compared against the DAG size: it counts redundant copies of the root sent concurrently
+by several replicas. The evidence `provenance` records, for audit: the per-peer rows,
+`data_received`, `dup_data_received`, `dag_size`, `ledger_declared_total`,
+`ledger_undeclared_total` and `unattributed` (`data_received` minus the ledger sum).
+
+**Known limitation:** if an undeclared peer sends a copy of a block that a declared replica also
+sent, bitswap cannot tell them apart. The only trace is a positive `unattributed`; check its
+distribution in a campaign.
+
+### Faults and resume
+
+Harness faults abort the run with exit 1, so nothing is recorded for that attempt. Harness faults
+are:
+
+- executor exit 2, a refusal, or anything other than one valid output line;
+- inside the executor: a registry read error (RPC HTTP error, missing Film account), a local
+  filesystem error while writing the retrieved file, or a `bitswap stat` without a `Peers` key;
+- an SSH failure or an unanswerable probe;
+- a gate that never confirms within `max_gate_attempts`;
+- a block that exceeds `max_block_generations`;
+- a record whose `cid_expected` or `film_pda` differs from the planned attempt (e.g. the RPC
+  points at another cluster that has an account at the same PDA);
+- evidence whose `declared_replicas` set differs from the topology's replica PeerIDs (an extra or
+  missing declared peer would mis-attribute provenance and could fake a refutation);
+- inconsistent artifacts (see below).
+
+`eval:h2 run --resume <run_id> --topology …` reloads `plans/h2-<run_id>.json` and skips every
+result already recorded under the same `scenario`. It handles each block as follows:
+
+- A block whose last `end` is confirmed is skipped.
+- A block whose last `end` is unconfirmed resumes at `g+1`.
+- A block that crashed mid-generation with results already recorded is checked **before** the
+  state is re-applied:
+  - If the check is not confirmed, it is logged as `end confirmed:false`, and the block moves to
+    `g+1`.
+  - If it is confirmed, it is logged as an extra `gate` record, followed by the normal
+    re-apply gate or gates, and the remaining attempts run in the same generation. The resume
+    pre-check is the **first** `gate` record of that generation whose `at` is later than the
+    generation's last pre-crash result. It closes the pre-crash segment, so each segment is
+    bracketed by state checks.
+- A confirmed `end` with missing results aborts the run: the artifacts are inconsistent.
+
+`check_number` continues across resumes.
+
+Operator notes:
+
+- `--resume` must be given the same `--out` as the original run. A different `--out` starts from
+  scratch in the new file.
+- Never run two `eval:h2 run` processes on the same `--out` or the same run: nothing locks the
+  artifacts, and both would append to them.
+- A mid-run fault leaves the replicas in the failing block's state. Resume re-applies the state;
+  nothing has to be restored by hand.
+- Error messages redact every URL from the topology (RPC, gateway, network node API, bootstrap
+  multiaddr). The SSH `host:port` of a replica may still appear: it is operator diagnostics.
+- The attempt payload, including the full `rpc_url`, enters the executor container as the
+  `SPIRAL_ATTEMPT` environment variable. It is therefore visible to `docker inspect` on the control
+  machine while the container runs. Records only ever contain the host.
+
+**Evidence pairing.** The orchestrator appends the evidence line before the result line, and the
+result line is the commit point. A crash between the two can leave evidence with no result, and
+resume then writes a second evidence line for the same attempt. Analysis must join evidence to
+results on `(attempt_id, generation)`, take the **last** evidence line for each key, and ignore
+evidence that has no result.
+
+### Report
+
+The report shows the latest H2 run:
+
+- **Included attempts.** Only attempts whose generation's last `end` is confirmed are counted.
+  The others are excluded and counted on two separate lines: one for an unconfirmed end
+  (`end-of-block replica state not confirmed`), one for a crash before the end check
+  (`no end-of-block state check recorded`). The spec's "invalid" generations are the report's
+  "excluded" attempts.
+- **Attempts line.** The line reads
+  `Attempts included: X of Y planned (Z recorded, including re-run generations)`. Y is the plan's
+  attempt count. Z counts every record of the run, including records of invalid generations.
+  **This line is the authoritative count.**
+- **Status line.** On a completed run it prints `complete (R/Y attempts)`, where R is the
+  `recorded_attempts` of the `completed` marker. R includes re-run generations, so it can exceed Y
+  (e.g. `complete (8/6)`). On an unfinished run it prints `**INCOMPLETE**` with the included count
+  of Y (`X of Y expected attempts included`).
+- **Refutation line.** `**Direct success with zero active replicas: N** — this refutes H2.` It
+  appears only when an included `direct` attempt succeeded in a zero-replica block.
+- **Contaminated control line.** The report prints:
+
+  ```text
+  **Zero-replica control contaminated: N direct recoveries from undeclared sources** — does not refute H2; the zero-replica control is weakened.
+  ```
+
+  It counts included `direct` attempts recorded as `external_cache` in a zero-replica block: the
+  content was recovered and verified, but from a peer the Film account does not declare. That
+  does not refute H2, which is only refuted by delivery from declared replicas (a direct
+  `success`). It does mean something outside the registry still served the content with every
+  replica off, so the zero-replica control no longer isolates the replicas. The line prints
+  independently of the refutation line, and both can appear.
+
+- **Rate table (`h2-rates.csv`).** One row per `replica_state` × method, in plan order.
+  `replica_state` is the block name. `external_cache` has its own column and is left out of the
+  denominator of `success_rate`. Blocks that share an active replica set (e.g. `main`,
+  `cold-start` and `replicas=3`) stay separate rows; combine them by hand if needed.
+- **Latency table (`h2-latency.csv`).** Successful attempts per size band × method.
+  `latency_ms` covers the whole attempt, including:
+  - the registry RPC read;
+  - for `direct`: `initFreshNode`, daemon startup and the provenance queries;
+  - the CID recomputation.
+- **Cold vs warm.** Neither table separates cold works from warm ones: nothing in the report reads
+  `cold_cid`, and blocks with `works: "all"` mix both. To compare them, use campaign blocks with
+  `works: "cold"` / `"warm"`, or join the records against the golden inventory's `cold_cid`.
+- **Failure table.** Keyed by `replica_state`, method and `failure_class`. It is markdown only,
+  with no CSV.
+
+### Dry run
+
+`packages/eval/campaigns/h2-dry-run.json` is a reduced campaign (`main`, `cold-start`,
+`replicas=3…0`, one repetition, `stabilization_ms` 3 s). `startLocalTopology()` in
+`packages/eval/src/h2/testing/local-topology.ts` starts a private Docker network with a swarm key.
+It contains a network node, a gateway-only node and three systemd-in-Docker replicas controlled
+over SSH. `packages/eval/src/h2/h2.e2e.test.ts` runs the whole flow against it with a Surfpool
+chain:
+
+- degradation in order;
+- a crash and resume;
+- drift that invalidates a generation;
+- the report.
+
+The chain must drain its events (see [the embedded Surfpool stall](solana-kit-notes.md#testing-against-surfpool)).
+
+### Phase 6
+
+- **Campaign.** The campaign composition (200/60/120 attempts) is the researcher's decision,
+  written as a campaign spec like `h2-dry-run.json`.
+- **Timing.** On the public DHT, set `stabilization_ms` to minutes, not seconds. The recommended
+  timeout is `{ "base_ms": 60000, "per_mb_ms": 1000 }` (`timeout` is required in the spec).
+- **Topology.** Start from `packages/eval/campaigns/topology.example.json`; replace the `<…>`,
+  `.example` and PeerID values.
+  - `replicas` must equal the active replicas declared on every Film in the golden. A mismatch
+    faults on the first attempt.
+  - Reach the probe VPS's Kubo API through an SSH tunnel (`ssh -L 15001:127.0.0.1:5001 probe`),
+    which gives `network_node.api_url` = `http://127.0.0.1:15001`.
+  - `bootstrap_multiaddr: null` means the public DHT, and `swarm_key_path: null` means the public
+    network.
+  - Set `block_cidrs` to the submission machine's address.
+  - `replicas[].ssh` uses the `spiral` operator account from the
+    [IPFS nodes runbook](ipfs-nodes-runbook.md).
+- **Executor image.** Build it on the control machine with `buildExecutorImage()` or
+  `docker build -t spiral-h2-executor:dev packages/eval/src/h2/executor`.
+
+### Kubo 0.43.1 notes
+
+- `Reprovider.*` is deprecated, and the daemon refuses to start with it. Use `Provide.Strategy`
+  and `Provide.DHT.Interval`. `infra/kubo/setup.sh` sets `Provide` and clears `Reprovider`.
+- A private network (swarm key) requires `AutoConf.Enabled=false` and `AutoTLS.Enabled=false`.
+- `Routing.AcceleratedDHTClient=true` never becomes ready in a tiny private DHT, so nothing gets
+  provided. It is off in the local overlay only, and stays on in `setup.sh` for the public DHT.
+- `--profile server` filters private addresses, so the local overlay sets `Swarm.AddrFilters=[]`
+  and `Addresses.NoAnnounce=[]`.
 
 ## H3
 

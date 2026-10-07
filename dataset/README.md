@@ -34,6 +34,13 @@ Público (MEC). `source` in the manifest is restricted to these four.
 Before Phase 6, `node scripts/validate-manifest.ts --final` must pass: exactly 20 works, 7/8/5
 per band, no `placeholder: true`.
 
+## Cold CIDs
+
+Five works are reserved as cold CIDs (`cold_cid: true`). They must **never** be requested through
+a public gateway before the zero-replica leg of H2: not by the researcher's browser, not by H1
+(which uses Kubo RPC only), not by anything. Otherwise a gateway cache could serve them with zero
+replicas and fake a refutation. `--final` requires exactly 5.
+
 ## Why sha256 in addition to the CID
 
 The raw-file sha256 is independent of IPFS chunking. If H1 reports a CID divergence, it separates

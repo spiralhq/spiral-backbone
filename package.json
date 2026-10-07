@@ -13,6 +13,7 @@
     "test": "turbo run test",
     "eval": "tsx packages/eval/src/cli.ts",
     "eval:h1": "tsx packages/eval/src/cli.ts h1",
+    "eval:h2": "tsx packages/eval/src/cli.ts h2",
     "eval:h3": "tsx packages/eval/src/cli.ts h3",
     "eval:h4": "tsx packages/eval/src/cli.ts h4",
     "eval:report": "tsx packages/eval/src/cli.ts report",

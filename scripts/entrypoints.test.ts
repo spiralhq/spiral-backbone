@@ -19,4 +19,7 @@ describe("CLI entrypoints run under tsx", () => {
   it("spiral-eval --help", () => {
     expect(runEntrypoint("packages/eval/src/cli.ts", ["--help"])).toContain("spiral-eval");
   }, 30_000);
+  it("spiral-eval h2 --help", () => {
+    expect(runEntrypoint("packages/eval/src/cli.ts", ["h2", "--help"])).toMatch(/plan[\s\S]*run/);
+  }, 30_000);
 });

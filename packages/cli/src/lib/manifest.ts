@@ -7,6 +7,7 @@ const manifestWorkSchema = z.object({
   work_id: z.string().min(1),
   size_bytes: z.number().int().positive(),
   size_band: z.enum(["small", "medium", "large"]),
+  cold_cid: z.boolean(),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
 

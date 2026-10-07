@@ -78,7 +78,12 @@ export function h4DivergenceRows(run: z.infer<typeof h4RunSchema>): string[][] {
   return [...counts.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, n]) => [k, String(n)]);
 }
 
-export function statusLine(marks: RunStatus[], runId: string, recorded: number): string {
+export function statusLine(
+  marks: RunStatus[],
+  runId: string,
+  recorded: number,
+  countLabel: "recorded" | "included" = "recorded",
+): string {
   const own = marks.filter((m) => m.run_id === runId);
   const started = own.find((m) => m.status === "started");
   const completed = own.find((m) => m.status === "completed");
@@ -86,6 +91,6 @@ export function statusLine(marks: RunStatus[], runId: string, recorded: number):
   if (completed?.status === "completed")
     return `Status: complete (${completed.recorded_attempts}/${expected ?? completed.recorded_attempts} attempts)\n`;
   if (expected !== undefined)
-    return `Status: **INCOMPLETE** — run did not finish (${recorded} of ${expected} expected attempts recorded)\n`;
+    return `Status: **INCOMPLETE** — run did not finish (${recorded} of ${expected} expected attempts ${countLabel})\n`;
   return "Status: unknown (no run-status sidecar)\n";
 }

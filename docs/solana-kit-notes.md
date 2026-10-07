@@ -78,6 +78,13 @@ surfnet) needs to get right:
 - The test payer needs a real file-backed keypair (`solana-keygen`), not an in-memory Kit
   signer — freshly generated Kit signers are non-extractable by design and can't be written
   to the file `--keypair` expects.
+- An embedded surfnet started with `startWithConfig({ offline: true })` keeps producing slots
+  and buffers one simnet event per slot until `Surfnet.drainEvents()` is called. Nothing in
+  the Kit plugin drains that buffer. Undrained, the surfnet stops answering RPC after about
+  1,000 slots (~80 s at the default rate), while its port stays bound, so clients just hang.
+  Any test that keeps a surfnet up longer than that must drain the events on an interval.
+  `packages/eval/src/testing/chain.ts` does this. The H2 dry run was the first test long
+  enough to hit it.
 - `handleCliError` calls `process.exit(1)` on any CLI failure, which would kill the test
   worker if invoked for real in-process. Mock `process.exit` to throw instead when testing a
   failure path, and mock `console.error` to inspect what it printed.

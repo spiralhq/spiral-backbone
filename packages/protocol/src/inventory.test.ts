@@ -50,6 +50,7 @@ describe("inventoryRecordFromFilm", () => {
     filmPda: fakeAddress(5),
     film: film(),
     sizeBand: "small",
+    coldCid: true,
     sha256: "4ba23cfc250d9471a7f73aef6000313977e4a16df6ecff4d2eca46ed61f710ed",
     registerSignature: "sig-register",
     replicaSignatures: ["sig-r1", "sig-r2"],
@@ -75,6 +76,10 @@ describe("inventoryRecordFromFilm", () => {
       bump: 252,
       captured_at: "2026-10-02T12:00:00.000Z",
     });
+  });
+
+  it("carries cold_cid", () => {
+    expect(record.cold_cid).toBe(true);
   });
 
   it("keeps only declared replica slots, deactivated ones included, with hex PeerIDs", () => {
@@ -112,6 +117,7 @@ describe("inventoryRecordSchema", () => {
       filmPda: fakeAddress(5),
       film: film(),
       sizeBand: "small",
+      coldCid: false,
       sha256: "0".repeat(64),
       registerSignature: "s",
       replicaSignatures: [],
@@ -119,5 +125,21 @@ describe("inventoryRecordSchema", () => {
     });
     expect(inventoryRecordSchema.safeParse({ ...base, byte_size: "12.5" }).success).toBe(false);
     expect(inventoryRecordSchema.safeParse({ ...base, extra: 1 }).success).toBe(false);
+  });
+
+  it("rejects a record without cold_cid", () => {
+    const base = inventoryRecordFromFilm({
+      workId: "pd-001",
+      filmPda: fakeAddress(5),
+      film: film(),
+      sizeBand: "small",
+      coldCid: false,
+      sha256: "0".repeat(64),
+      registerSignature: "s",
+      replicaSignatures: [],
+      rpcEndpoint: "h",
+    });
+    const { cold_cid: _omitted, ...without } = base;
+    expect(inventoryRecordSchema.safeParse(without).success).toBe(false);
   });
 });

@@ -331,6 +331,7 @@ function writeManifest(path: string, workId: string, content: Uint8Array): void 
           work_id: workId,
           size_bytes: content.byteLength,
           size_band: "small",
+          cold_cid: false,
           sha256: createHash("sha256").update(content).digest("hex"),
         },
       ],

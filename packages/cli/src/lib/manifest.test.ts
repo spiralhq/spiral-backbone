@@ -11,6 +11,7 @@ const work: ManifestWork = {
   work_id: "pd-901",
   size_bytes: content.byteLength,
   size_band: "small",
+  cold_cid: false,
   sha256: sha,
 };
 
@@ -25,6 +26,11 @@ describe("findManifestWork", () => {
   it("returns the entry for a known work_id, ignoring fields it does not need", async () => {
     const path = manifestFile([{ ...work, title: "x", placeholder: true }]);
     expect(await findManifestWork(path, "pd-901")).toEqual(work);
+  });
+
+  it("returns cold_cid true when the manifest says so", async () => {
+    const path = manifestFile([{ ...work, cold_cid: true }]);
+    expect((await findManifestWork(path, "pd-901")).cold_cid).toBe(true);
   });
 
   it("fails clearly for an unknown work_id", async () => {

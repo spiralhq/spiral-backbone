@@ -13,6 +13,7 @@ export const SIZE_BANDS = {
 export type SizeBand = keyof typeof SIZE_BANDS;
 
 export const FINAL_BAND_COUNTS: Record<SizeBand, number> = { small: 7, medium: 8, large: 5 };
+export const FINAL_COLD_COUNT = 5;
 
 export const SOURCES = [
   "Prelinger Archives",
@@ -40,6 +41,7 @@ const workSchema = z
     duration_seconds: z.number().positive(),
     size_bytes: z.number().int().positive(),
     size_band: z.enum(["small", "medium", "large"]),
+    cold_cid: z.boolean(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     placeholder: z.boolean(),
   })
@@ -138,6 +140,10 @@ export async function validateManifest(
           `final manifest must have ${FINAL_BAND_COUNTS[band]} works in band ${band}, has ${count}`,
         );
       }
+    }
+    const cold = works.filter((w) => w.cold_cid).length;
+    if (cold !== FINAL_COLD_COUNT) {
+      errors.push(`final manifest must have ${FINAL_COLD_COUNT} cold_cid works, has ${cold}`);
     }
     for (const work of works.filter((w) => w.placeholder)) {
       errors.push(`${work.work_id}: placeholder entries are not allowed in the final manifest`);
