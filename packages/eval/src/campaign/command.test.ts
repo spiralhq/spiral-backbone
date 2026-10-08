@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,7 +16,10 @@ const dir = mkdtempSync(join(tmpdir(), "spiral-campaign-cmd-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const keypair = join(dir, "payer.json");
-execFileSync("solana-keygen", ["new", "--no-bip39-passphrase", "--silent", "--outfile", keypair]);
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const seed = privateKey.export({ format: "der", type: "pkcs8" }).subarray(-32);
+const pub = publicKey.export({ format: "der", type: "spki" }).subarray(-32);
+writeFileSync(keypair, JSON.stringify([...seed, ...pub]));
 const topology = join(dir, "topology.json");
 writeFileSync(
   topology,
