@@ -8,8 +8,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   assertSshReachable,
   checkStatus,
+  checkSystemdActive,
   remoteKuboVersion,
+  remoteSudoRefusals,
   shutdownService,
+  SshFault,
+  SshProbeFault,
   startService,
   type NodeStatus,
   type SshTarget,
@@ -24,6 +28,7 @@ describe("kubo-node-control (SSH end-to-end via Docker)", () => {
   let containerId: string;
   let target: SshTarget;
   let swarmPort: number;
+  let strangerKey: string;
 
   beforeAll(async () => {
     buildDir = mkdtempSync(join(tmpdir(), "kubo-control-build-"));
@@ -33,6 +38,8 @@ describe("kubo-node-control (SSH end-to-end via Docker)", () => {
     const keyPath = join(buildDir, "id_ed25519");
     await execFileAsync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", keyPath, "-q"]);
     copyFileSync(`${keyPath}.pub`, join(buildDir, "authorized_keys"));
+    strangerKey = join(buildDir, "id_stranger");
+    await execFileAsync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", strangerKey, "-q"]);
 
     await execFileAsync("docker", ["build", "-t", IMAGE_TAG, buildDir]);
 
@@ -77,13 +84,48 @@ describe("kubo-node-control (SSH end-to-end via Docker)", () => {
 
   it("shuts the service down and both checks flip to false", async () => {
     await shutdownService(target, "stand-in");
-    const status = await checkStatus(target, swarmPort, "stand-in");
+    // --no-block returns once the stop job is queued; the state check observes the outcome.
+    const status = await waitForStatus(
+      target,
+      swarmPort,
+      "stand-in",
+      (s) => !s.systemdActive && !s.swarmReachable,
+    );
     expect(status).toEqual({ systemdActive: false, swarmReachable: false });
+  }, 15_000);
+
+  it("throws a probe fault, never false, when SSH cannot answer the systemd check", async () => {
+    const error = await checkSystemdActive({ ...target, port: 1 }, "stand-in").catch((e) => e);
+    expect(error).toBeInstanceOf(SshProbeFault);
+    expect(error.message).toMatch(
+      /probe fault: SSH to 127\.0\.0\.1:1 could not connect: .*Connection (refused|timed out)/,
+    );
+  }, 45_000);
+
+  it("faults at once, not as a probe fault, on a key the host does not accept", async () => {
+    const started = Date.now();
+    const error = await checkSystemdActive(
+      { ...target, identityFile: strangerKey },
+      "stand-in",
+    ).catch((e) => e);
+    expect(error).toBeInstanceOf(SshFault);
+    expect(error.message).toMatch(
+      /SSH to 127\.0\.0\.1:\d+: authentication failed: [\s\S]*Permission denied/,
+    );
+    expect(Date.now() - started).toBeLessThan(2_000);
   }, 15_000);
 
   it("asserts SSH reachability, and rejects for a closed port", async () => {
     await expect(assertSshReachable(target)).resolves.toBeUndefined();
     await expect(assertSshReachable({ ...target, port: 1 })).rejects.toThrow(/SSH to .*:1 failed/);
+  }, 45_000);
+
+  it("finds both --no-block rules in sudoers, and nothing for another service", async () => {
+    await expect(remoteSudoRefusals(target, "stand-in")).resolves.toEqual([]);
+    await expect(remoteSudoRefusals(target, "ipfs")).resolves.toEqual([
+      "/usr/bin/systemctl --no-block start ipfs",
+      "/usr/bin/systemctl --no-block stop ipfs",
+    ]);
   }, 30_000);
 
   it("reads the remote Kubo version over SSH", async () => {
@@ -156,3 +198,33 @@ async function waitForSsh(target: SshTarget, timeoutMs = 60_000): Promise<void> 
     `SSH to ${target.host}:${target.port} did not become ready within ${timeoutMs}ms`,
   );
 }
+
+describe("kubo-node-control (SSH faults that will not pass)", () => {
+  const target: SshTarget = {
+    host: "no-such-host.invalid",
+    port: 22,
+    user: "spiral",
+    identityFile: "/nonexistent",
+    insecureHostKeyChecking: true,
+  };
+
+  it("faults at once on a host name that does not resolve", async () => {
+    const error = await checkSystemdActive(target).catch((e) => e);
+    expect(error).toBeInstanceOf(SshFault);
+    expect(error.message).toMatch(
+      /^SSH to no-such-host\.invalid:22: cannot resolve the host name: [\s\S]*Could not resolve hostname/,
+    );
+  }, 15_000);
+
+  it("faults at once when the ssh binary is missing", async () => {
+    const path = process.env["PATH"];
+    process.env["PATH"] = mkdtempSync(join(tmpdir(), "no-ssh-"));
+    try {
+      const error = await checkSystemdActive(target).catch((e) => e);
+      expect(error).toBeInstanceOf(SshFault);
+      expect(error.message).toMatch(/^ssh could not run for no-such-host\.invalid:22 \(ENOENT\)$/);
+    } finally {
+      process.env["PATH"] = path;
+    }
+  });
+});

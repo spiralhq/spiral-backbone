@@ -33,11 +33,19 @@ const INFRA = [
   "infra:chunking conformance",
   "infra:replica a",
   "infra:replica b",
+  "infra:replica a sudo",
+  "infra:replica b sudo",
   "infra:network node",
   "infra:gateway",
   "infra:executor image",
 ];
-const H2 = ["h2:golden ↔ manifest", "h2:Films ↔ golden ↔ topology", "h2:campaign plan"];
+const H2 = [
+  "h2:golden ↔ manifest",
+  "h2:Films ↔ golden ↔ topology",
+  "h2:replica a pins",
+  "h2:replica b pins",
+  "h2:campaign plan",
+];
 
 describe("buildChecks", () => {
   it("assembles the infra stage in order", async () => {
@@ -46,6 +54,13 @@ describe("buildChecks", () => {
 
   it("assembles the h2 stage", async () => {
     expect(await names("h2", inputs, { rpc })).toEqual(H2);
+  });
+
+  it("adds plan ↔ golden last when a plan is given", async () => {
+    expect(await names("h2", { ...inputs, planPath: "p.json" }, { rpc })).toEqual([
+      ...H2,
+      "h2:plan ↔ golden",
+    ]);
   });
 
   it("runs both stages for all", async () => {

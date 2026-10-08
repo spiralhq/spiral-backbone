@@ -8,4 +8,5 @@
 
 export * from "./adminMembership";
 export * from "./membership";
+export * from "./newAuthorityMembership";
 export * from "./organization";

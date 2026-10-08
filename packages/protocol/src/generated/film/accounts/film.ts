@@ -114,7 +114,10 @@ export function getFilmEncoder(): Encoder<FilmArgs> {
       ["title", addEncoderSizePrefix(getUtf8Encoder(), getU32Encoder())],
       ["submittedAt", getI64Encoder()],
       ["accessPolicy", getAccessPolicyEncoder()],
-      ["replicas", getArrayEncoder(getReplicaDeclarationEncoder(), { size: 8 })],
+      [
+        "replicas",
+        getArrayEncoder(getReplicaDeclarationEncoder(), { size: 8 }),
+      ],
       ["replicaCount", getU8Encoder()],
       ["schemaVersion", getU8Encoder()],
       ["bump", getU8Encoder()],
@@ -157,7 +160,10 @@ export function decodeFilm<TAddress extends string = string>(
 export function decodeFilm<TAddress extends string = string>(
   encodedAccount: EncodedAccount<TAddress> | MaybeEncodedAccount<TAddress>,
 ): Account<Film, TAddress> | MaybeAccount<Film, TAddress> {
-  return decodeAccount(encodedAccount as MaybeEncodedAccount<TAddress>, getFilmDecoder());
+  return decodeAccount(
+    encodedAccount as MaybeEncodedAccount<TAddress>,
+    getFilmDecoder(),
+  );
 }
 
 export async function fetchFilm<TAddress extends string = string>(

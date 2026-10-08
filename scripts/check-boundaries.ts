@@ -5,7 +5,8 @@ export interface BoundaryRule {
   name: string;
   glob: string;
   exclude?: string[];
-  forbidden: string[];
+  forbidden?: string[];
+  forbiddenNames?: { from: string[]; names: string[] }[];
 }
 
 export const boundaryRules: BoundaryRule[] = [
@@ -46,10 +47,39 @@ export const boundaryRules: BoundaryRule[] = [
       "../../../../indexer",
     ],
   },
+  {
+    name: "membership-pda-from-organization",
+    glob: "{packages/*/{src,scripts},scripts}/**/*.ts",
+    exclude: ["packages/protocol/src/generated/**", "scripts/check-boundaries.test.ts"],
+    forbiddenNames: [
+      {
+        from: ["@spiral-backbone/protocol/generated/film", "./generated/film"],
+        names: ["findMembershipPda"],
+      },
+    ],
+  },
 ];
 
 const IMPORT_RE =
   /(?:import|export)\s[^;]*?from\s+["']([^"']+)["']|require\(\s*["']([^"']+)["']\s*\)/g;
+
+function matchesSpecifier(specifier: string, target: string): boolean {
+  return specifier === target || specifier.startsWith(`${target}/`);
+}
+
+function importedNames(statement: string): string[] {
+  const clause = /\{([^}]*)\}/.exec(statement)?.[1] ?? "";
+  return clause
+    .split(",")
+    .map((part) =>
+      part
+        .trim()
+        .replace(/^type\s+/, "")
+        .split(/\s+as\s+/)[0]!
+        .trim(),
+    )
+    .filter((name) => name.length > 0);
+}
 
 export function findViolations(rules: BoundaryRule[], cwd: string = process.cwd()): string[] {
   const violations: string[] = [];
@@ -62,11 +92,19 @@ export function findViolations(rules: BoundaryRule[], cwd: string = process.cwd(
       for (const match of source.matchAll(IMPORT_RE)) {
         const specifier = match[1] ?? match[2];
         if (!specifier) continue;
-        const hit = rule.forbidden.find(
-          (forbidden) => specifier === forbidden || specifier.startsWith(`${forbidden}/`),
+        const hit = (rule.forbidden ?? []).find((forbidden) =>
+          matchesSpecifier(specifier, forbidden),
         );
         if (hit) {
           violations.push(`${file}: imports "${specifier}", forbidden by rule "${rule.name}"`);
+        }
+        for (const { from, names } of rule.forbiddenNames ?? []) {
+          if (!from.some((target) => matchesSpecifier(specifier, target))) continue;
+          for (const name of importedNames(match[0]).filter((n) => names.includes(n))) {
+            violations.push(
+              `${file}: imports "${name}" from "${specifier}", forbidden by rule "${rule.name}"`,
+            );
+          }
         }
       }
     }

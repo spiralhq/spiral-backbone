@@ -114,7 +114,10 @@ export function getMembershipDecoder(): FixedSizeDecoder<Membership> {
 }
 
 /** Gets the codec for {@link Membership} account data. */
-export function getMembershipCodec(): FixedSizeCodec<MembershipArgs, Membership> {
+export function getMembershipCodec(): FixedSizeCodec<
+  MembershipArgs,
+  Membership
+> {
   return combineCodec(getMembershipEncoder(), getMembershipDecoder());
 }
 
@@ -127,7 +130,10 @@ export function decodeMembership<TAddress extends string = string>(
 export function decodeMembership<TAddress extends string = string>(
   encodedAccount: EncodedAccount<TAddress> | MaybeEncodedAccount<TAddress>,
 ): Account<Membership, TAddress> | MaybeAccount<Membership, TAddress> {
-  return decodeAccount(encodedAccount as MaybeEncodedAccount<TAddress>, getMembershipDecoder());
+  return decodeAccount(
+    encodedAccount as MaybeEncodedAccount<TAddress>,
+    getMembershipDecoder(),
+  );
 }
 
 export async function fetchMembership<TAddress extends string = string>(

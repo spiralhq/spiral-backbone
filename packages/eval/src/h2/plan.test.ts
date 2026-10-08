@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -65,6 +65,22 @@ describe("campaign validation", () => {
     expect(validateCampaign(spec).join("\n")).toMatch(
       /block main: zero active replicas is only allowed in a degradation block/,
     );
+  });
+
+  it("rejects a campaign file without max_end_attempts with a clear message", async () => {
+    const { max_end_attempts: _, ...older } = await preset();
+    const path = join(mkdtempSync(join(tmpdir(), "h2-campaign-")), "older.json");
+    writeFileSync(path, JSON.stringify(older));
+    await expect(loadCampaign(path)).rejects.toThrow(/max_end_attempts is required/);
+    expect(() => campaignSpecSchema.parse(older)).toThrow();
+  });
+
+  it("reads a plan frozen before max_end_attempts existed", async () => {
+    const plan = generatePlan({ campaign: await preset(), golden: [warm, cold], runId: "r-old" });
+    const { max_end_attempts: _, ...campaign } = plan.campaign;
+    const path = join(mkdtempSync(join(tmpdir(), "h2-plan-")), "h2-r-old.json");
+    writeFileSync(path, JSON.stringify({ ...plan, campaign }));
+    expect((await readPlan(path)).campaign.max_end_attempts).toBeUndefined();
   });
 
   it("schema refuses unknown keys", () => {

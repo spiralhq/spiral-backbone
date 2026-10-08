@@ -1,4 +1,4 @@
-import { EXPECTED_INSTRUCTION_INDEX, type H3Scenario } from "./scenarios";
+import { EXPECTED_INSTRUCTION_INDEX, REFUSING_PROGRAM_ADDRESS, type H3Scenario } from "./scenarios";
 
 export interface InstructionFailure {
   index: number;
@@ -6,8 +6,7 @@ export interface InstructionFailure {
 }
 
 export interface RawSendResult {
-  signature: string | null;
-  sendError: string | null;
+  signature: string;
   err: unknown;
   logs: string[];
 }
@@ -24,7 +23,10 @@ export function parseInstructionError(err: unknown): InstructionFailure | null {
   if (!Array.isArray(tuple) || tuple.length !== 2) return null;
   const [index, detail] = tuple as [unknown, unknown];
   if (!detail || typeof detail !== "object" || !("Custom" in detail)) return null;
-  return { index: Number(index), code: Number((detail as { Custom: unknown }).Custom) };
+  return {
+    index: Number(index),
+    code: Number((detail as { Custom: unknown }).Custom),
+  };
 }
 
 export function failingProgram(logs: readonly string[]): string | null {
@@ -36,22 +38,17 @@ export function failingProgram(logs: readonly string[]): string | null {
 }
 
 export function judge(scenario: H3Scenario, result: RawSendResult): H3Verdict {
-  if (result.signature === null) {
-    return {
-      outcome: "failure",
-      observed: null,
-      reason: `refused before reaching the chain: ${result.sendError}`,
-    };
-  }
-  if (result.sendError !== null) {
-    return { outcome: "failure", observed: null, reason: result.sendError };
-  }
   if (result.err === null || result.err === undefined) {
     return {
       outcome: "failure",
       observed: null,
       reason: "transaction was accepted by the program",
     };
+  }
+  if (!result.logs || result.logs.length === 0) {
+    throw new Error(
+      `transaction ${result.signature} landed with an error but the RPC returned no logs (provider fault)`,
+    );
   }
   const observed = parseInstructionError(result.err);
   if (!observed) {
@@ -68,5 +65,18 @@ export function judge(scenario: H3Scenario, result: RawSendResult): H3Verdict {
       reason: `expected code ${scenario.expectedCode} at instruction ${EXPECTED_INSTRUCTION_INDEX}, got ${observed.code} at ${observed.index}`,
     };
   }
-  return { outcome: "success", observed, reason: "rejected on-chain with the expected code" };
+  const expectedProgram = REFUSING_PROGRAM_ADDRESS[scenario.refusingProgram];
+  const refusedBy = failingProgram(result.logs);
+  if (refusedBy !== expectedProgram) {
+    return {
+      outcome: "failure",
+      observed,
+      reason: `expected ${scenario.refusingProgram} (${expectedProgram}) to refuse, got ${refusedBy ?? "no failing program in the logs"}`,
+    };
+  }
+  return {
+    outcome: "success",
+    observed,
+    reason: "rejected on-chain with the expected code by the expected program",
+  };
 }

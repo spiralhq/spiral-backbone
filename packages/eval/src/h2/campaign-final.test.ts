@@ -41,6 +41,10 @@ describe("campaigns/h2-final.json", () => {
     expect(new Set(coldGateway)).toEqual(new Set(["replicas=0"]));
   });
 
+  it("retries the end-of-block check up to 5 times", async () => {
+    expect((await loadCampaign(FINAL)).max_end_attempts).toBe(5);
+  });
+
   it("uses the campaign timeout of 60 s + 1 s per started MB", async () => {
     const spec = await loadCampaign(FINAL);
     expect(spec.timeout).toEqual({ base_ms: 60_000, per_mb_ms: 1_000 });

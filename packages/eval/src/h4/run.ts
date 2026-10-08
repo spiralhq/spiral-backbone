@@ -15,6 +15,7 @@ import {
   type InventoryRecord,
   type ResultRecord,
 } from "@spiral-backbone/protocol";
+import { assertExpectedCluster } from "../common/cluster";
 import { appendResult, toJsonLine } from "../common/ndjson";
 import { markRunCompleted, markRunStarted } from "../common/run-status";
 import { sidecarPath } from "../common/sidecar";
@@ -24,6 +25,7 @@ export interface H4Options {
   golden: InventoryRecord[];
   db: Database;
   rpcUrl: string;
+  expectedGenesis: string;
   outPath: string;
   runId: string;
 }
@@ -33,9 +35,18 @@ async function writeRun(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${toJsonLine(value)}\n`);
 }
 
+function inGoldenScope(error: unknown, golden: InventoryRecord[]): boolean {
+  if (!(error instanceof InvalidAccountError) || !error.scope) return false;
+  const organizations = new Set(golden.map((g) => g.organization));
+  const { kind, address, organization } = error.scope;
+  if (kind === "organization") return organizations.has(address);
+  return organization !== undefined && organizations.has(organization);
+}
+
 export async function runH4(
   options: H4Options,
 ): Promise<{ success: number; failure: number; backfillFailed: boolean }> {
+  await assertExpectedCluster(options.rpcUrl, options.expectedGenesis);
   const runPath = sidecarPath(options.outPath, "run");
   const base = {
     run_id: options.runId,
@@ -74,7 +85,7 @@ export async function runH4(
     report = await backfill({ db: options.db, rpcUrl: options.rpcUrl, reset: true });
   } catch (error) {
     const failed = error instanceof BackfillError ? error.report : null;
-    const refuted = error instanceof BackfillError && error.cause instanceof InvalidAccountError;
+    const refuted = error instanceof BackfillError && inGoldenScope(error.cause, options.golden);
     await writeRun(runPath, {
       run_id: options.runId,
       backfill: failed,

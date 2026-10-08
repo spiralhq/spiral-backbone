@@ -18,12 +18,31 @@ const MAX_REPLICAS = 8;
 const MAX_PEER_ID_LEN = 38;
 const SUPPORTED_SCHEMA_VERSION = 1;
 
-export class InvalidAccountError extends Error {}
+export interface InvalidAccountScope {
+  kind: "organization" | "film";
+  address: string;
+  organization?: string;
+}
 
-function assertSchemaVersion(kind: string, address: Address, schemaVersion: number): void {
+export class InvalidAccountError extends Error {
+  readonly scope: InvalidAccountScope | undefined;
+
+  constructor(message: string, scope?: InvalidAccountScope) {
+    super(message);
+    this.scope = scope;
+  }
+}
+
+function assertSchemaVersion(
+  kind: "organization" | "film",
+  address: Address,
+  schemaVersion: number,
+  organization?: string,
+): void {
   if (schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
     throw new InvalidAccountError(
       `${kind} ${address}: schema_version ${schemaVersion} is not supported (expected ${SUPPORTED_SCHEMA_VERSION})`,
+      { kind, address, organization },
     );
   }
 }
@@ -60,21 +79,29 @@ export function projectFilm(
   address: Address,
   account: Film,
 ): { film: FilmRecord; replicas: FilmReplicaRecord[] } {
-  assertSchemaVersion("film", address, account.schemaVersion);
+  assertSchemaVersion("film", address, account.schemaVersion, account.organization);
+  const scope: InvalidAccountScope = {
+    kind: "film",
+    address,
+    organization: account.organization,
+  };
   if (account.cidLen < 1 || account.cidLen > MAX_CID_LEN) {
     throw new InvalidAccountError(
       `film ${address}: cid_len ${account.cidLen} outside 1..${MAX_CID_LEN}`,
+      scope,
     );
   }
   if (account.replicaCount > MAX_REPLICAS) {
     throw new InvalidAccountError(
       `film ${address}: replica_count ${account.replicaCount} exceeds ${MAX_REPLICAS}`,
+      scope,
     );
   }
   const replicas = account.replicas.slice(0, account.replicaCount).map((replica, slot) => {
     if (replica.peerIdLen > MAX_PEER_ID_LEN) {
       throw new InvalidAccountError(
         `film ${address}: replica ${slot} peer_id_len ${replica.peerIdLen} exceeds ${MAX_PEER_ID_LEN}`,
+        scope,
       );
     }
     return {

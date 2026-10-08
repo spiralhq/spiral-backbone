@@ -6,8 +6,11 @@ import { createSpiralClient } from "../../lib/client";
 import { handleCliError } from "../../lib/errors";
 
 export const createOptionsSchema = z.object({
-  slug: z.string().min(1).max(32),
-  name: z.string().min(1).max(96),
+  slug: z.string().regex(/^[a-z0-9-]{1,32}$/, "slug must be 1-32 characters of [a-z0-9-]"),
+  name: z
+    .string()
+    .min(1)
+    .refine((name) => Buffer.byteLength(name, "utf8") <= 96, "name must be at most 96 bytes"),
   cluster: z.enum(["devnet", "local"]),
   keypair: z.string().min(1),
   rpcUrl: z.string().optional(),
@@ -17,8 +20,11 @@ export const createOptionsSchema = z.object({
 export const create = new Command()
   .name("create")
   .description("create a new organization")
-  .requiredOption("--slug <slug>", "short identifier for the organization (max 32 chars)")
-  .requiredOption("--name <name>", "display name (max 96 chars)")
+  .requiredOption(
+    "--slug <slug>",
+    "short identifier for the organization (1-32 chars of [a-z0-9-])",
+  )
+  .requiredOption("--name <name>", "display name (max 96 UTF-8 bytes)")
   .option("--cluster <cluster>", "devnet or local", "devnet")
   .option(
     "--keypair <path>",

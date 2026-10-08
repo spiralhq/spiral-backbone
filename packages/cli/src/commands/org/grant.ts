@@ -1,7 +1,8 @@
-import { address } from "@solana/kit";
+import { address, getProgramDerivedAddress } from "@solana/kit";
 import { findMembershipPda, findOrganizationPda } from "@spiral-backbone/protocol";
 import {
   getGrantMembershipInstructionAsync,
+  ORGANIZATION_PROGRAM_ADDRESS,
   Role,
 } from "@spiral-backbone/protocol/generated/organization";
 import { Command } from "commander";
@@ -47,12 +48,18 @@ export const grant = new Command()
       });
       const [organizationPda] = await findOrganizationPda({ slug: options.slug });
       const memberAddress = address(options.member);
+      const [eventAuthority] = await getProgramDerivedAddress({
+        programAddress: ORGANIZATION_PROGRAM_ADDRESS,
+        seeds: [new TextEncoder().encode("__event_authority")],
+      });
 
       const instruction = await getGrantMembershipInstructionAsync({
         authority: client.payer,
         organization: organizationPda,
         member: memberAddress,
         role: ROLE_MAP[options.role],
+        eventAuthority,
+        program: ORGANIZATION_PROGRAM_ADDRESS,
       });
 
       const { context } = await client.sendTransaction([instruction]);

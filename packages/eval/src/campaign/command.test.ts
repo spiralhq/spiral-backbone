@@ -154,8 +154,9 @@ describe("campaign preflight", () => {
       { from: "user" },
     );
     expect(process.exitCode).toBe(1);
-    expect(printed()).toMatch(/keypair .* is unreadable or not a valid keypair/);
+    expect(printed()).toContain("Pre-flight failed: keypair is unreadable or invalid");
     expect(printed()).not.toContain("secret-bytes");
+    expect(printed()).not.toContain(badKey);
   });
 
   it("rejects a non-positive --min-balance-sol and a non-integer --ping-timeout-ms", async () => {

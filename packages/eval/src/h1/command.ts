@@ -3,12 +3,14 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { z } from "zod";
 import { readGolden } from "../common/golden";
+import { DEVNET_GENESIS } from "../common/cluster";
 import { makeRunId } from "../common/run-id";
 import { runH1 } from "./run";
 
 const optionsSchema = z.object({
   golden: z.string().min(1),
   rpcUrl: z.url({ protocol: /^https?$/ }),
+  expectedGenesis: z.string().min(1),
   kuboUrl: z.url({ protocol: /^https?$/ }),
   out: z.string().min(1),
   workDir: z.string().min(1),
@@ -22,6 +24,7 @@ export const h1Command = new Command("h1")
   )
   .requiredOption("--golden <path>", "golden inventory written by spiral submit")
   .option("--rpc-url <url>", "Solana RPC (default: $SPIRAL_RPC_URL)")
+  .option("--expected-genesis <hash>", "expected cluster genesis hash", DEVNET_GENESIS)
   .option(
     "--kubo-url <url>",
     "Kubo RPC used for retrieval (never a public gateway)",
@@ -49,6 +52,7 @@ export const h1Command = new Command("h1")
       const summary = await runH1({
         golden: await readGolden(options.golden),
         rpcUrl: options.rpcUrl,
+        expectedGenesis: options.expectedGenesis,
         kuboUrl: options.kuboUrl,
         outPath: options.out,
         workDir: options.workDir,

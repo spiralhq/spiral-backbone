@@ -9,6 +9,7 @@ import {
   type ResultRecord,
 } from "@spiral-backbone/protocol";
 import { fetchFilm } from "@spiral-backbone/protocol/generated/film";
+import { assertExpectedCluster } from "../common/cluster";
 import { computeSpiralCidFromFile } from "../../verifier/index";
 import { appendJsonLine, appendResult } from "../common/ndjson";
 import { markRunCompleted, markRunStarted } from "../common/run-status";
@@ -17,12 +18,14 @@ import { verifierImpl } from "../common/verifier-impl";
 import { classifyWorkError } from "./classify";
 import { diagnoseIntactMismatch } from "./diagnose";
 import { sha256File } from "./hash";
+import { assertKuboReachable } from "./kubo-check";
 import { retrieveToFile } from "./retrieve";
 import { tamperOffset, writeTamperedCopy } from "./tamper";
 
 export interface H1Options {
   golden: InventoryRecord[];
   rpcUrl: string;
+  expectedGenesis: string;
   kuboUrl: string;
   outPath: string;
   workDir: string;
@@ -36,6 +39,8 @@ export interface H1Summary {
 }
 
 export async function runH1(options: H1Options): Promise<H1Summary> {
+  await assertExpectedCluster(options.rpcUrl, options.expectedGenesis);
+  await assertKuboReachable(options.kuboUrl);
   const rpc = createSolanaRpc(options.rpcUrl);
   const evidencePath = sidecarPath(options.outPath, "evidence");
   const shared = {

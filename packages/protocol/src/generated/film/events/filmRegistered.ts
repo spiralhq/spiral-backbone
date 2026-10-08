@@ -34,12 +34,13 @@ import {
   type ReadonlyUint8Array,
 } from "@solana/kit";
 
-export const FILM_REGISTERED_EVENT_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  93, 163, 40, 55, 55, 121, 171, 233,
-]);
+export const FILM_REGISTERED_EVENT_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([93, 163, 40, 55, 55, 121, 171, 233]);
 
 export function getFilmRegisteredEventDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(FILM_REGISTERED_EVENT_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    FILM_REGISTERED_EVENT_DISCRIMINATOR,
+  );
 }
 
 export type FilmRegisteredEvent = {
@@ -99,7 +100,10 @@ export function getFilmRegisteredEventCodec(): FixedSizeCodec<
   FilmRegisteredEventArgs,
   FilmRegisteredEvent
 > {
-  return combineCodec(getFilmRegisteredEventEncoder(), getFilmRegisteredEventDecoder());
+  return combineCodec(
+    getFilmRegisteredEventEncoder(),
+    getFilmRegisteredEventDecoder(),
+  );
 }
 
 /** Parses the provided bytes into {@link FilmRegisteredEvent} event data. */

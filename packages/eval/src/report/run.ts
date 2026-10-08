@@ -1,8 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ResultRecord } from "@spiral-backbone/protocol";
+import { RESUME_H2 } from "../common/ndjson";
 import { sidecarPath } from "../common/sidecar";
-import { blocksPath, readBlockRecords } from "../h2/blocks-log";
+import { blocksPath, readBlockRecords, validGenerations } from "../h2/blocks-log";
 import { planPath, readPlan, type FrozenPlan } from "../h2/plan";
 import {
   H2_AUDIT_HEADERS,
@@ -10,8 +11,12 @@ import {
   H2_FAILURE_HEADERS,
   H2_LATENCY_HEADERS,
   H2_RATE_HEADERS,
+  assertNoDuplicateH2Results,
   h2AcceptanceLine,
   h2AttemptsLine,
+  h2DirectOnlyLine,
+  h2OneReplicaLine,
+  h2ExtraGenerationsLine,
   provenanceAudit,
   summarizeH2,
 } from "./h2";
@@ -25,6 +30,7 @@ import {
   h3Rows,
   h4DivergenceRows,
   h4Summary,
+  mixedVersionsWarning,
   statusLine,
 } from "./sections";
 
@@ -50,6 +56,11 @@ async function loadH2Plan(plansDir: string, runId: string): Promise<FrozenPlan> 
     throw new Error(`frozen plan ${path} belongs to run ${plan.run_id}, not ${runId}`);
   return plan;
 }
+
+const versionsWarning = (records: ResultRecord[]): string[] => {
+  const warning = mixedVersionsWarning(records);
+  return warning === undefined ? [] : [warning];
+};
 
 const onlyRun = (records: ResultRecord[], runId: string | undefined) =>
   records.filter((r) => r.run_id === runId);
@@ -80,6 +91,7 @@ export async function generateReport(options: {
     const marks = await loadRunStatus(sidecarPath(h1Path, "runs"));
     const intact = own.filter((r) => r.scenario === "intact").length;
     parts.push(
+      ...versionsWarning(own),
       `Run: \`${h1Run}\`\n`,
       statusLine(marks, h1Run!, intact),
       markdownTable(H1_HEADERS, rows),
@@ -88,11 +100,12 @@ export async function generateReport(options: {
   }
 
   const h2Path = join(options.resultsDir, "h2.ndjson");
-  const h2All = await loadResults(h2Path);
+  const h2All = await loadResults(h2Path, RESUME_H2);
   const h2Run = options.runIds?.h2 ?? latestRunId(h2All);
   parts.push(`## H2 — Recuperabilidade a partir do registro\n`);
   if (h2All.length === 0) parts.push("No results.\n");
   else {
+    assertNoDuplicateH2Results(onlyRun(h2All, h2Run));
     const blockLog = await readBlockRecords(blocksPath(h2Path));
     const summary = summarizeH2(
       h2All,
@@ -109,12 +122,16 @@ export async function generateReport(options: {
     const marks = await loadRunStatus(sidecarPath(h2Path, "runs"));
     const started = marks.find((m) => m.run_id === h2Run && m.status === "started");
     const planned = started?.status === "started" ? started.expected_attempts : undefined;
+    const valid = validGenerations(blockLog, h2Run!);
     parts.push(
+      ...versionsWarning(onlyRun(h2All, h2Run).filter((r) => valid.has(r.scenario))),
       `Run: \`${h2Run}\`\n`,
       statusLine(marks, h2Run!, summary.included, "included"),
       h2AttemptsLine(summary.included, planned, onlyRun(h2All, h2Run).length),
     );
-    parts.push(h2AcceptanceLine(summary));
+    parts.push(h2AcceptanceLine(summary), h2DirectOnlyLine(summary), h2OneReplicaLine(summary));
+    if (summary.extraGenerations.length > 0)
+      parts.push(h2ExtraGenerationsLine(summary.extraGenerations));
     if (summary.excludedUnconfirmed > 0)
       parts.push(
         `Attempts excluded (end-of-block replica state not confirmed): ${summary.excludedUnconfirmed}\n`,
@@ -174,6 +191,7 @@ export async function generateReport(options: {
     const rows = h3Rows(own, await loadH3Evidence(sidecarPath(h3Path, "evidence")));
     const marks = await loadRunStatus(sidecarPath(h3Path, "runs"));
     parts.push(
+      ...versionsWarning(own),
       `Run: \`${h3Run}\`\n`,
       statusLine(marks, h3Run!, own.length),
       markdownTable(H3_HEADERS, rows),
@@ -184,12 +202,20 @@ export async function generateReport(options: {
   const h4Path = join(options.resultsDir, "h4.ndjson");
   const h4All = await loadResults(h4Path);
   const h4RunRecord = loadH4Run(sidecarPath(h4Path, "run"));
+  const wantedH4 = options.runIds?.h4;
+  if (wantedH4 !== undefined && !h4RunRecord)
+    throw new Error(`H4 run ${wantedH4} not found: there is no H4 run sidecar`);
+  if (wantedH4 !== undefined && h4RunRecord && h4RunRecord.run_id !== wantedH4)
+    throw new Error(
+      `H4 run ${wantedH4} not found: the H4 run sidecar holds ${h4RunRecord.run_id} only`,
+    );
   parts.push(`## H4 — Reconstrutibilidade da camada de consulta\n`);
   if (!h4RunRecord) parts.push("No results.\n");
   else {
     const divergences = h4DivergenceRows(h4RunRecord);
     const marks = await loadRunStatus(sidecarPath(h4Path, "runs"));
     parts.push(
+      ...versionsWarning(onlyRun(h4All, h4RunRecord.run_id)),
       `Run: \`${h4RunRecord.run_id}\`\n`,
       statusLine(marks, h4RunRecord.run_id, onlyRun(h4All, h4RunRecord.run_id).length),
       markdownTable(["metric", "value"], h4Summary(h4RunRecord)),

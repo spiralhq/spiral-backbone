@@ -2,6 +2,7 @@ import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { generateKeyPairSigner } from "@solana/kit";
 import { afterEach, describe, expect, it } from "vitest";
 import { generateClients } from "./generate-clients";
 
@@ -47,9 +48,36 @@ describe("generateClients", () => {
     await generateClients(idlDir, outDir);
     const generated = await import(pathToFileURL(join(outDir, "film", "index.ts")).href);
     expect("findFilmPda" in generated).toBe(false);
-    // film.json has no `pda` metadata (unlike organization.json's 8), so Codama emits only
-    // the sync getRegisterFilmInstruction, not an ...Async variant.
     expect("getRegisterFilmInstructionAsync" in generated).toBe(false);
     expect(typeof generated.getRegisterFilmInstruction).toBe("function");
+  }, 30_000);
+
+  it("derives the replica instructions' membership under the organization program", async () => {
+    const { idlDir, outDir } = setUpFakeDirs();
+    await generateClients(idlDir, outDir);
+    const film = await import(pathToFileURL(join(outDir, "film", "index.ts")).href);
+    const organization = await import(pathToFileURL(join(outDir, "organization", "index.ts")).href);
+    const authority = await generateKeyPairSigner();
+    const [org] = await organization.findOrganizationPda({ slug: "spiralhq" });
+    const [expected] = await organization.findMembershipPda({
+      organization: org,
+      member: authority.address,
+    });
+
+    const instruction = await film.getDeclareReplicaInstructionAsync({
+      authority,
+      organization: org,
+      film: org,
+      eventAuthority: org,
+      program: film.FILM_PROGRAM_ADDRESS,
+      peerId: new Uint8Array(38),
+      peerIdLen: 38,
+    });
+    expect(instruction.accounts.map((a: { address: string }) => a.address).slice(0, 4)).toEqual([
+      authority.address,
+      org,
+      expected,
+      organization.ORGANIZATION_PROGRAM_ADDRESS,
+    ]);
   }, 30_000);
 });

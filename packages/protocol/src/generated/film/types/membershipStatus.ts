@@ -30,6 +30,12 @@ export function getMembershipStatusDecoder(): FixedSizeDecoder<MembershipStatus>
   return getEnumDecoder(MembershipStatus);
 }
 
-export function getMembershipStatusCodec(): FixedSizeCodec<MembershipStatusArgs, MembershipStatus> {
-  return combineCodec(getMembershipStatusEncoder(), getMembershipStatusDecoder());
+export function getMembershipStatusCodec(): FixedSizeCodec<
+  MembershipStatusArgs,
+  MembershipStatus
+> {
+  return combineCodec(
+    getMembershipStatusEncoder(),
+    getMembershipStatusDecoder(),
+  );
 }

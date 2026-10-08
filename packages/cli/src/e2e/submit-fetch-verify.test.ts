@@ -3,8 +3,17 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchPeerId, inventoryRecordSchema } from "@spiral-backbone/protocol";
-import { createClient, lamports } from "@solana/kit";
+import {
+  fetchPeerId,
+  inventoryRecordSchema,
+  type InventoryRecord,
+} from "@spiral-backbone/protocol";
+import {
+  FILM_PROGRAM_ADDRESS,
+  FilmInstruction,
+  identifyFilmInstruction,
+} from "@spiral-backbone/protocol/generated/film";
+import { createClient, lamports, type Instruction } from "@solana/kit";
 import { signerFromFile } from "@solana/kit-plugin-signer";
 import { surfpool } from "@solana/surfpool/kit";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -13,6 +22,36 @@ import { submit } from "../commands/submit";
 import { fetch_ } from "../commands/fetch/index";
 import { verify } from "../commands/verify";
 import { startKuboContainer, type KuboContainer } from "../../../eval/src/kubo-node";
+
+const sendHook = vi.hoisted(() => ({
+  failAtDeclare: false,
+  sent: [] as { kind: string; signature: string }[],
+}));
+
+vi.mock("../lib/client", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../lib/client")>();
+  return {
+    ...original,
+    createSpiralClient: async (options: Parameters<typeof original.createSpiralClient>[0]) => {
+      const client = await original.createSpiralClient(options);
+      const sendTransaction = async (instructions: Instruction[]) => {
+        const [first] = instructions;
+        const kind =
+          first?.programAddress === FILM_PROGRAM_ADDRESS && first.data
+            ? FilmInstruction[identifyFilmInstruction(first.data)]!
+            : "other";
+        if (kind === "DeclareReplica" && sendHook.failAtDeclare) {
+          sendHook.failAtDeclare = false;
+          throw new Error("injected failure before declare_replica");
+        }
+        const result = await client.sendTransaction(instructions);
+        sendHook.sent.push({ kind, signature: result.context.signature });
+        return result;
+      };
+      return { ...client, sendTransaction } as typeof client;
+    },
+  };
+});
 
 const SPIRAL_PROGRAMS_DEPLOY_DIR = join(
   import.meta.dirname,
@@ -308,7 +347,123 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
       errorSpy.mockRestore();
     }
   }, 60_000);
+
+  it("resumes an interrupted submit to the same golden line as an uninterrupted one", async () => {
+    const content = new TextEncoder().encode("spiral e2e resumable content");
+    const filePath = join(workDir, "resumable.bin");
+    writeFileSync(filePath, content);
+    const manifestPath = join(workDir, "resumable-manifest.json");
+    writeManifest(manifestPath, "pd-903", content);
+    const stamp = Date.now();
+    const straightSlug = `e2e-straight-${stamp}`;
+    const resumedSlug = `e2e-resumed-${stamp}`;
+    for (const slug of [straightSlug, resumedSlug]) await createOrg(slug);
+
+    const submitArgs = (slug: string) => [
+      "--org",
+      slug,
+      "--work-id",
+      "pd-903",
+      "--manifest",
+      manifestPath,
+      "--file",
+      filePath,
+      "--title",
+      "E2E Resumable Film",
+      "--replicas",
+      kubo.apiUrl,
+      "--cluster",
+      "local",
+      "--rpc-url",
+      rpcUrl,
+      "--ws-url",
+      wsUrl,
+      "--keypair",
+      keypairPath,
+    ];
+    const runSubmit = (slug: string) =>
+      captureConsole(() => submit.parseAsync(submitArgs(slug), { from: "user" }));
+    const takeSent = () => sendHook.sent.splice(0);
+
+    takeSent();
+    const straight = inventoryRecordSchema.parse(
+      JSON.parse((await runSubmit(straightSlug)).trim()),
+    );
+    const straightSent = takeSent();
+    expect(straightSent.map((s) => s.kind)).toEqual(["RegisterFilm", "DeclareReplica"]);
+    expect(straight.register_signature).toBe(straightSent[0]!.signature);
+    expect(straight.replica_signatures).toEqual([straightSent[1]!.signature]);
+
+    sendHook.failAtDeclare = true;
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("process.exit called");
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(submit.parseAsync(submitArgs(resumedSlug), { from: "user" })).rejects.toThrow(
+        "process.exit called",
+      );
+      expect(logSpy).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      const errors = errorSpy.mock.calls.map((args) => args.join(" ")).join("\n");
+      expect(errors).toContain("injected failure before declare_replica");
+    } finally {
+      exitSpy.mockRestore();
+      errorSpy.mockRestore();
+      logSpy.mockRestore();
+      sendHook.failAtDeclare = false;
+    }
+    const interruptedSent = takeSent();
+    expect(interruptedSent.map((s) => s.kind)).toEqual(["RegisterFilm"]);
+
+    const resumed = inventoryRecordSchema.parse(JSON.parse((await runSubmit(resumedSlug)).trim()));
+    const resumedSent = takeSent();
+    expect(resumedSent.map((s) => s.kind)).toEqual(["DeclareReplica"]);
+    expect(resumed.register_signature).toBe(interruptedSent[0]!.signature);
+    expect(resumed.replica_signatures).toEqual([resumedSent[0]!.signature]);
+    expect(withoutRunSpecifics(resumed)).toEqual(withoutRunSpecifics(straight));
+
+    const again = inventoryRecordSchema.parse(JSON.parse((await runSubmit(resumedSlug)).trim()));
+    expect(takeSent()).toEqual([]);
+    expect({ ...again, captured_at: "" }).toEqual({ ...resumed, captured_at: "" });
+  }, 120_000);
+
+  async function createOrg(slug: string): Promise<void> {
+    await create.parseAsync(
+      [
+        "--slug",
+        slug,
+        "--name",
+        "E2E Org",
+        "--cluster",
+        "local",
+        "--rpc-url",
+        rpcUrl,
+        "--ws-url",
+        wsUrl,
+        "--keypair",
+        keypairPath,
+      ],
+      { from: "user" },
+    );
+  }
 });
+
+/** Timestamps, plus what differs only because the two Films live in different organizations. */
+function withoutRunSpecifics(record: InventoryRecord) {
+  return {
+    ...record,
+    film_pda: "",
+    bump: 0,
+    organization: "",
+    register_signature: "",
+    replica_signatures: record.replica_signatures.map(() => ""),
+    submitted_at: "",
+    captured_at: "",
+    replicas: record.replicas.map((replica) => ({ ...replica, declared_at: "" })),
+  };
+}
 
 function createSurfnetClient() {
   return createClient().use(surfpool({ surfnet: { offline: true } }));

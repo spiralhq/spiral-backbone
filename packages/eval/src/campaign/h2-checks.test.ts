@@ -22,8 +22,13 @@ import {
   filmsMatchCheck,
   goldenMatchesManifestCheck,
   manifestFinalCheck,
+  planMatchesGoldenCheck,
+  replicaPinsChecks,
   type FilmRpc,
 } from "./h2-checks";
+import { loadCampaign } from "../h2/campaign";
+import { generatePlan, writePlan } from "../h2/plan";
+import { SshProbeFault } from "../../../../scripts/kubo-node-control";
 
 const dir = mkdtempSync(join(tmpdir(), "spiral-h2-checks-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -213,7 +218,9 @@ function filmRpc(accounts: Map<string, Uint8Array>, failFirst = 0): FilmRpc {
       send: async () => {
         if (failures > 0) {
           failures--;
-          throw new TypeError("fetch failed");
+          throw new TypeError("fetch failed", {
+            cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }),
+          });
         }
         const data = accounts.get(addr);
         if (!data) return { context: { slot: 1n }, value: null };
@@ -353,6 +360,73 @@ describe("campaignFeasibleCheck", () => {
     const campaign = write("campaign.json", '{"campaign_version": "secret-ish"');
     expect(await failure(campaignFeasibleCheck(campaign, goldenFile(GOLDEN), topology))).toBe(
       `campaign ${campaign} is unreadable or not valid JSON`,
+    );
+  });
+});
+
+describe("replicaPinsChecks", () => {
+  const pinned = (cids: string[]) => async () => cids;
+  const goldenCids = GOLDEN.map((r) => r.cid);
+
+  it("returns one h2 check per replica, named `replica <name> pins`", () => {
+    const checks = replicaPinsChecks(topology, goldenFile(GOLDEN), { pins: pinned([]) });
+    expect(checks.map((c) => [c.stage, c.name])).toEqual([
+      ["h2", "replica a pins"],
+      ["h2", "replica b pins"],
+      ["h2", "replica c pins"],
+    ]);
+  });
+
+  it("passes when every golden CID is pinned, ignoring extra pins", async () => {
+    const targets: unknown[] = [];
+    const [a] = replicaPinsChecks(topology, goldenFile(GOLDEN), {
+      pins: async (t) => {
+        targets.push(t);
+        return [...goldenCids, "bafyextra"];
+      },
+    });
+    await expect(a!.run()).resolves.toBe("20 of 20 golden CIDs pinned");
+    expect(targets).toEqual([expect.objectContaining({ host: "127.0.0.1", port: 2200 })]);
+  });
+
+  it("blocks naming the missing CIDs", async () => {
+    const [, b] = replicaPinsChecks(topology, goldenFile(GOLDEN), {
+      pins: pinned(goldenCids.filter((c) => c !== GOLDEN[3]!.cid)),
+    });
+    expect(await failure(b!)).toBe(`b: 1 golden CID not pinned: ${GOLDEN[3]!.cid}`);
+  });
+
+  it("blocks on an SSH fault", async () => {
+    const [a] = replicaPinsChecks(topology, goldenFile(GOLDEN), {
+      pins: async () => {
+        throw new SshProbeFault("probe fault: SSH to 127.0.0.1:2200 timed out");
+      },
+    });
+    expect(await failure(a!)).toMatch(/^probe fault: SSH to 127\.0\.0\.1:2200 timed out/);
+  });
+});
+
+describe("planMatchesGoldenCheck", () => {
+  async function planFor(golden: InventoryRecord[]): Promise<string> {
+    const path = join(mkdtempSync(join(dir, "frozen-")), "plan.json");
+    await writePlan(
+      path,
+      generatePlan({ campaign: await loadCampaign(FINAL_CAMPAIGN), golden, runId: "r" }),
+    );
+    return path;
+  }
+
+  it("passes when the plan froze the current golden", async () => {
+    const check = planMatchesGoldenCheck(await planFor(GOLDEN), goldenFile(GOLDEN));
+    expect([check.stage, check.name]).toEqual(["h2", "plan ↔ golden"]);
+    await expect(check.run()).resolves.toMatch(/^golden digest [0-9a-f]{64}$/);
+  });
+
+  it("blocks when the golden changed after the plan was frozen", async () => {
+    const plan = await planFor(GOLDEN);
+    const changed = GOLDEN.map((r, i) => (i === 0 ? { ...r, title: "edited" } : r));
+    expect(await failure(planMatchesGoldenCheck(plan, goldenFile(changed)))).toMatch(
+      /^plan golden_sha256 [0-9a-f]{64} differs from the current golden [0-9a-f]{64}$/,
     );
   });
 });

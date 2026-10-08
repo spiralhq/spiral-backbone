@@ -33,20 +33,23 @@ import {
 } from "@solana/kit";
 import {
   getAccountMetaFactory,
+  getAddressFromResolvedInstructionAccount,
   type InstructionAccountInput,
   type InstructionAccountInputAddress,
   type InstructionSignerInput,
   type ResolvedInstructionAccount,
   type ResolvedInstructionAccountMeta,
 } from "@solana/program-client-core";
+import { findNewAuthorityMembershipPda } from "../pdas";
 import { ORGANIZATION_PROGRAM_ADDRESS } from "../programs";
 
-export const TRANSFER_AUTHORITY_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  48, 169, 76, 72, 229, 180, 55, 161,
-]);
+export const TRANSFER_AUTHORITY_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([48, 169, 76, 72, 229, 180, 55, 161]);
 
 export function getTransferAuthorityDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(TRANSFER_AUTHORITY_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    TRANSFER_AUTHORITY_DISCRIMINATOR,
+  );
 }
 
 export type TransferAuthorityInstruction<
@@ -54,13 +57,17 @@ export type TransferAuthorityInstruction<
   TAccountAuthority extends string | AccountMeta<string> = string,
   TAccountOrganization extends string | AccountMeta<string> = string,
   TAccountNewAuthority extends string | AccountMeta<string> = string,
+  TAccountNewAuthorityMembership extends string | AccountMeta<string> = string,
+  TAccountEventAuthority extends string | AccountMeta<string> = string,
+  TAccountProgram extends string | AccountMeta<string> = string,
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
 > = Instruction<TProgram> &
   InstructionWithData<ReadonlyUint8Array> &
   InstructionWithAccounts<
     [
       TAccountAuthority extends string
-        ? ReadonlySignerAccount<TAccountAuthority> & AccountSignerMeta<TAccountAuthority>
+        ? ReadonlySignerAccount<TAccountAuthority> &
+            AccountSignerMeta<TAccountAuthority>
         : TAccountAuthority,
       TAccountOrganization extends string
         ? WritableAccount<TAccountOrganization>
@@ -68,6 +75,15 @@ export type TransferAuthorityInstruction<
       TAccountNewAuthority extends string
         ? ReadonlyAccount<TAccountNewAuthority>
         : TAccountNewAuthority,
+      TAccountNewAuthorityMembership extends string
+        ? ReadonlyAccount<TAccountNewAuthorityMembership>
+        : TAccountNewAuthorityMembership,
+      TAccountEventAuthority extends string
+        ? ReadonlyAccount<TAccountEventAuthority>
+        : TAccountEventAuthority,
+      TAccountProgram extends string
+        ? ReadonlyAccount<TAccountProgram>
+        : TAccountProgram,
       ...TRemainingAccounts,
     ]
   >;
@@ -86,7 +102,9 @@ export function getTransferAuthorityInstructionDataEncoder(): FixedSizeEncoder<T
 }
 
 export function getTransferAuthorityInstructionDataDecoder(): FixedSizeDecoder<TransferAuthorityInstructionData> {
-  return getStructDecoder([["discriminator", fixDecoderSize(getBytesDecoder(), 8)]]);
+  return getStructDecoder([
+    ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
+  ]);
 }
 
 export function getTransferAuthorityInstructionDataCodec(): FixedSizeCodec<
@@ -99,37 +117,71 @@ export function getTransferAuthorityInstructionDataCodec(): FixedSizeCodec<
   );
 }
 
-export type TransferAuthorityInput<
+export type TransferAuthorityAsyncInput<
   TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
-  TAccountNewAuthority extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountNewAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountNewAuthorityMembership extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
 > = {
   authority: TAccountAuthority;
   organization: TAccountOrganization;
   newAuthority: TAccountNewAuthority;
+  newAuthorityMembership?: TAccountNewAuthorityMembership;
+  eventAuthority: TAccountEventAuthority;
+  program: TAccountProgram;
 };
 
-export function getTransferAuthorityInstruction<
+export async function getTransferAuthorityInstructionAsync<
   TAccountAuthority extends InstructionSignerInput,
   TAccountOrganization extends InstructionAccountInput,
   TAccountNewAuthority extends InstructionAccountInput,
+  TAccountNewAuthorityMembership extends InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput,
   TProgramAddress extends Address = typeof ORGANIZATION_PROGRAM_ADDRESS,
 >(
-  input: TransferAuthorityInput<TAccountAuthority, TAccountOrganization, TAccountNewAuthority>,
-  config?: { programAddress?: TProgramAddress },
-): TransferAuthorityInstruction<
-  TProgramAddress,
-  ResolvedInstructionAccountMeta<
+  input: TransferAuthorityAsyncInput<
     TAccountAuthority,
-    InstructionAccountInputAddress<TAccountAuthority>
-  >,
-  ResolvedInstructionAccountMeta<
     TAccountOrganization,
-    InstructionAccountInputAddress<TAccountOrganization>
-  >,
-  ResolvedInstructionAccountMeta<
     TAccountNewAuthority,
-    InstructionAccountInputAddress<TAccountNewAuthority>
+    TAccountNewAuthorityMembership,
+    TAccountEventAuthority,
+    TAccountProgram
+  >,
+  config?: { programAddress?: TProgramAddress },
+): Promise<
+  TransferAuthorityInstruction<
+    TProgramAddress,
+    ResolvedInstructionAccountMeta<
+      TAccountAuthority,
+      InstructionAccountInputAddress<TAccountAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganization,
+      InstructionAccountInputAddress<TAccountOrganization>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountNewAuthority,
+      InstructionAccountInputAddress<TAccountNewAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountNewAuthorityMembership,
+      InstructionAccountInputAddress<TAccountNewAuthorityMembership>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
   >
 > {
   // Program address.
@@ -155,17 +207,52 @@ export function getTransferAuthorityInstruction<
       isSigner: false,
       isWritable: false,
     },
+    newAuthorityMembership: {
+      value: input.newAuthorityMembership ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    eventAuthority: {
+      value: input.eventAuthority ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    program: {
+      value: input.program ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
     ResolvedInstructionAccount
   >;
 
+  // Resolve default values.
+  if (!accounts.newAuthorityMembership.value) {
+    accounts.newAuthorityMembership.value = await findNewAuthorityMembershipPda(
+      {
+        organization: getAddressFromResolvedInstructionAccount(
+          "organization",
+          accounts.organization.value,
+        ),
+        newAuthority: getAddressFromResolvedInstructionAccount(
+          "newAuthority",
+          accounts.newAuthority.value,
+        ),
+      },
+      { programAddress },
+    );
+  }
+
   return Object.freeze({
     accounts: [
       getAccountMeta("authority", accounts.authority),
       getAccountMeta("organization", accounts.organization),
       getAccountMeta("newAuthority", accounts.newAuthority),
+      getAccountMeta("newAuthorityMembership", accounts.newAuthorityMembership),
+      getAccountMeta("eventAuthority", accounts.eventAuthority),
+      getAccountMeta("program", accounts.program),
     ],
     data: getTransferAuthorityInstructionDataEncoder().encode({}),
     programAddress,
@@ -182,6 +269,167 @@ export function getTransferAuthorityInstruction<
     ResolvedInstructionAccountMeta<
       TAccountNewAuthority,
       InstructionAccountInputAddress<TAccountNewAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountNewAuthorityMembership,
+      InstructionAccountInputAddress<TAccountNewAuthorityMembership>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
+  >);
+}
+
+export type TransferAuthorityInput<
+  TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountNewAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountNewAuthorityMembership extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
+> = {
+  authority: TAccountAuthority;
+  organization: TAccountOrganization;
+  newAuthority: TAccountNewAuthority;
+  newAuthorityMembership: TAccountNewAuthorityMembership;
+  eventAuthority: TAccountEventAuthority;
+  program: TAccountProgram;
+};
+
+export function getTransferAuthorityInstruction<
+  TAccountAuthority extends InstructionSignerInput,
+  TAccountOrganization extends InstructionAccountInput,
+  TAccountNewAuthority extends InstructionAccountInput,
+  TAccountNewAuthorityMembership extends InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput,
+  TProgramAddress extends Address = typeof ORGANIZATION_PROGRAM_ADDRESS,
+>(
+  input: TransferAuthorityInput<
+    TAccountAuthority,
+    TAccountOrganization,
+    TAccountNewAuthority,
+    TAccountNewAuthorityMembership,
+    TAccountEventAuthority,
+    TAccountProgram
+  >,
+  config?: { programAddress?: TProgramAddress },
+): TransferAuthorityInstruction<
+  TProgramAddress,
+  ResolvedInstructionAccountMeta<
+    TAccountAuthority,
+    InstructionAccountInputAddress<TAccountAuthority>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountOrganization,
+    InstructionAccountInputAddress<TAccountOrganization>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountNewAuthority,
+    InstructionAccountInputAddress<TAccountNewAuthority>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountNewAuthorityMembership,
+    InstructionAccountInputAddress<TAccountNewAuthorityMembership>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountEventAuthority,
+    InstructionAccountInputAddress<TAccountEventAuthority>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountProgram,
+    InstructionAccountInputAddress<TAccountProgram>
+  >
+> {
+  // Program address.
+  const programAddress = config?.programAddress ?? ORGANIZATION_PROGRAM_ADDRESS;
+
+  // Account meta helper.
+  const getAccountMeta = getAccountMetaFactory(programAddress, "programId");
+
+  // Original accounts.
+  const originalAccounts = {
+    authority: {
+      value: input.authority ?? null,
+      isSigner: true,
+      isWritable: false,
+    },
+    organization: {
+      value: input.organization ?? null,
+      isSigner: false,
+      isWritable: true,
+    },
+    newAuthority: {
+      value: input.newAuthority ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    newAuthorityMembership: {
+      value: input.newAuthorityMembership ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    eventAuthority: {
+      value: input.eventAuthority ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    program: {
+      value: input.program ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+  };
+  const accounts = originalAccounts as Record<
+    keyof typeof originalAccounts,
+    ResolvedInstructionAccount
+  >;
+
+  return Object.freeze({
+    accounts: [
+      getAccountMeta("authority", accounts.authority),
+      getAccountMeta("organization", accounts.organization),
+      getAccountMeta("newAuthority", accounts.newAuthority),
+      getAccountMeta("newAuthorityMembership", accounts.newAuthorityMembership),
+      getAccountMeta("eventAuthority", accounts.eventAuthority),
+      getAccountMeta("program", accounts.program),
+    ],
+    data: getTransferAuthorityInstructionDataEncoder().encode({}),
+    programAddress,
+  } as TransferAuthorityInstruction<
+    TProgramAddress,
+    ResolvedInstructionAccountMeta<
+      TAccountAuthority,
+      InstructionAccountInputAddress<TAccountAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganization,
+      InstructionAccountInputAddress<TAccountOrganization>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountNewAuthority,
+      InstructionAccountInputAddress<TAccountNewAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountNewAuthorityMembership,
+      InstructionAccountInputAddress<TAccountNewAuthorityMembership>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
     >
   >);
 }
@@ -195,6 +443,9 @@ export type ParsedTransferAuthorityInstruction<
     authority: TAccountMetas[0];
     organization: TAccountMetas[1];
     newAuthority: TAccountMetas[2];
+    newAuthorityMembership: TAccountMetas[3];
+    eventAuthority: TAccountMetas[4];
+    program: TAccountMetas[5];
   };
   data: TransferAuthorityInstructionData;
 };
@@ -207,11 +458,14 @@ export function parseTransferAuthorityInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedTransferAuthorityInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 3) {
-    throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS, {
-      actualAccountMetas: instruction.accounts.length,
-      expectedAccountMetas: 3,
-    });
+  if (instruction.accounts.length < 6) {
+    throw new SolanaError(
+      SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
+      {
+        actualAccountMetas: instruction.accounts.length,
+        expectedAccountMetas: 6,
+      },
+    );
   }
   let accountIndex = 0;
   const getNextAccount = () => {
@@ -225,6 +479,9 @@ export function parseTransferAuthorityInstruction<
       authority: getNextAccount(),
       organization: getNextAccount(),
       newAuthority: getNextAccount(),
+      newAuthorityMembership: getNextAccount(),
+      eventAuthority: getNextAccount(),
+      program: getNextAccount(),
     },
     data: getTransferAuthorityInstructionDataDecoder().decode(instruction.data),
   };

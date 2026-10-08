@@ -20,6 +20,7 @@ export const campaignSpecSchema = z
     replica_nodes: z.array(nodeName).min(1),
     stabilization_ms: z.number().int().nonnegative(),
     max_gate_attempts: z.number().int().positive(),
+    max_end_attempts: z.number().int().positive(),
     max_block_generations: z.number().int().positive(),
     timeout: z
       .object({ base_ms: z.number().int().positive(), per_mb_ms: z.number().int().nonnegative() })
@@ -86,7 +87,13 @@ export function validateCampaign(spec: CampaignSpec): string[] {
 }
 
 export async function loadCampaign(path: string): Promise<CampaignSpec> {
-  const spec = campaignSpecSchema.parse(JSON.parse(await readFile(path, "utf8")));
+  const raw: unknown = JSON.parse(await readFile(path, "utf8"));
+  if (typeof raw === "object" && raw !== null && !("max_end_attempts" in raw)) {
+    throw new Error(
+      `invalid campaign ${path}: max_end_attempts is required (a positive integer: how many end-of-block checks may run before a generation is invalidated)`,
+    );
+  }
+  const spec = campaignSpecSchema.parse(raw);
   const errors = validateCampaign(spec);
   if (errors.length > 0) {
     throw new Error(

@@ -1,5 +1,6 @@
 import { createSolanaRpc } from "@solana/kit";
 import { artifactVersions, describeEndpoint } from "@spiral-backbone/protocol";
+import { assertExpectedCluster } from "../common/cluster";
 import { appendJsonLine, appendResult } from "../common/ndjson";
 import { markRunCompleted, markRunStarted } from "../common/run-status";
 import { sidecarPath } from "../common/sidecar";
@@ -13,12 +14,14 @@ import { EXPECTED_INSTRUCTION_INDEX, H3_SCENARIOS } from "./scenarios";
 export interface H3Options {
   client: H3Client;
   rpcUrl: string;
+  expectedGenesis: string;
   outPath: string;
   runId: string;
   label: string;
 }
 
 export async function runH3(options: H3Options): Promise<{ success: number; failure: number }> {
+  await assertExpectedCluster(options.rpcUrl, options.expectedGenesis);
   await markRunStarted(options.outPath, options.runId, H3_SCENARIOS.length);
   const fixtures = await setupH3Fixtures(options.client, options.label);
   const rpc = createSolanaRpc(options.rpcUrl);
@@ -66,7 +69,6 @@ export async function runH3(options: H3Options): Promise<{ success: number; fail
       observed: verdict.observed,
       failing_program: failingProgram(result.logs),
       reason: verdict.reason,
-      send_error: result.sendError,
       err: result.err,
       logs: result.logs,
     });

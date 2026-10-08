@@ -50,12 +50,13 @@ import {
 import { findAdminMembershipPda, findOrganizationPda } from "../pdas";
 import { ORGANIZATION_PROGRAM_ADDRESS } from "../programs";
 
-export const INITIALIZE_ORGANIZATION_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  21, 20, 253, 138, 250, 160, 119, 87,
-]);
+export const INITIALIZE_ORGANIZATION_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([21, 20, 253, 138, 250, 160, 119, 87]);
 
 export function getInitializeOrganizationDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(INITIALIZE_ORGANIZATION_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    INITIALIZE_ORGANIZATION_DISCRIMINATOR,
+  );
 }
 
 export type InitializeOrganizationInstruction<
@@ -63,19 +64,23 @@ export type InitializeOrganizationInstruction<
   TAccountAuthority extends string | AccountMeta<string> = string,
   TAccountOrganization extends string | AccountMeta<string> = string,
   TAccountMembership extends string | AccountMeta<string> = string,
-  TAccountSystemProgram extends string | AccountMeta<string> = "11111111111111111111111111111111",
+  TAccountSystemProgram extends string | AccountMeta<string> =
+    "11111111111111111111111111111111",
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
 > = Instruction<TProgram> &
   InstructionWithData<ReadonlyUint8Array> &
   InstructionWithAccounts<
     [
       TAccountAuthority extends string
-        ? WritableSignerAccount<TAccountAuthority> & AccountSignerMeta<TAccountAuthority>
+        ? WritableSignerAccount<TAccountAuthority> &
+            AccountSignerMeta<TAccountAuthority>
         : TAccountAuthority,
       TAccountOrganization extends string
         ? WritableAccount<TAccountOrganization>
         : TAccountOrganization,
-      TAccountMembership extends string ? WritableAccount<TAccountMembership> : TAccountMembership,
+      TAccountMembership extends string
+        ? WritableAccount<TAccountMembership>
+        : TAccountMembership,
       TAccountSystemProgram extends string
         ? ReadonlyAccount<TAccountSystemProgram>
         : TAccountSystemProgram,
@@ -128,9 +133,11 @@ export function getInitializeOrganizationInstructionDataCodec(): Codec<
 
 export type InitializeOrganizationAsyncInput<
   TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
-  TAccountSystemProgram extends InstructionAccountInput = InstructionAccountInput,
+  TAccountSystemProgram extends InstructionAccountInput =
+    InstructionAccountInput,
 > = {
   authority: TAccountAuthority;
   organization?: TAccountOrganization;
@@ -226,7 +233,10 @@ export async function getInitializeOrganizationInstructionAsync<
           "organization",
           accounts.organization.value,
         ),
-        authority: getAddressFromResolvedInstructionAccount("authority", accounts.authority.value),
+        authority: getAddressFromResolvedInstructionAccount(
+          "authority",
+          accounts.authority.value,
+        ),
       },
       { programAddress },
     );
@@ -270,9 +280,11 @@ export async function getInitializeOrganizationInstructionAsync<
 
 export type InitializeOrganizationInput<
   TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
-  TAccountSystemProgram extends InstructionAccountInput = InstructionAccountInput,
+  TAccountSystemProgram extends InstructionAccountInput =
+    InstructionAccountInput,
 > = {
   authority: TAccountAuthority;
   organization: TAccountOrganization;
@@ -413,10 +425,13 @@ export function parseInitializeOrganizationInstruction<
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedInitializeOrganizationInstruction<TProgram, TAccountMetas> {
   if (instruction.accounts.length < 4) {
-    throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS, {
-      actualAccountMetas: instruction.accounts.length,
-      expectedAccountMetas: 4,
-    });
+    throw new SolanaError(
+      SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
+      {
+        actualAccountMetas: instruction.accounts.length,
+        expectedAccountMetas: 4,
+      },
+    );
   }
   let accountIndex = 0;
   const getNextAccount = () => {
@@ -432,6 +447,8 @@ export function parseInitializeOrganizationInstruction<
       membership: getNextAccount(),
       systemProgram: getNextAccount(),
     },
-    data: getInitializeOrganizationInstructionDataDecoder().decode(instruction.data),
+    data: getInitializeOrganizationInstructionDataDecoder().decode(
+      instruction.data,
+    ),
   };
 }

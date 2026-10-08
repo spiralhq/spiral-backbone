@@ -62,5 +62,8 @@ export function getReplicaDeclarationCodec(): FixedSizeCodec<
   ReplicaDeclarationArgs,
   ReplicaDeclaration
 > {
-  return combineCodec(getReplicaDeclarationEncoder(), getReplicaDeclarationDecoder());
+  return combineCodec(
+    getReplicaDeclarationEncoder(),
+    getReplicaDeclarationDecoder(),
+  );
 }

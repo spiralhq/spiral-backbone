@@ -6,4 +6,7 @@
  * @see https://github.com/codama-idl/codama
  */
 
+export * from "./accessPolicyUpdated";
 export * from "./filmRegistered";
+export * from "./replicaDeactivated";
+export * from "./replicaDeclared";

@@ -14,9 +14,9 @@ import {
 } from "@solana/kit";
 import { ORGANIZATION_PROGRAM_ADDRESS } from "../programs";
 
-/** MembershipNotFound: Signer has no active membership in this organization */
+/** MembershipNotFound: No membership account exists for the signer (reserved; Anchor reports AccountNotInitialized) */
 export const ORGANIZATION_ERROR__MEMBERSHIP_NOT_FOUND = 0x1770; // 6000
-/** MembershipRevoked: Membership has been revoked */
+/** MembershipRevoked: Signer's membership has been revoked */
 export const ORGANIZATION_ERROR__MEMBERSHIP_REVOKED = 0x1771; // 6001
 /** InsufficientRole: Role does not permit this action */
 export const ORGANIZATION_ERROR__INSUFFICIENT_ROLE = 0x1772; // 6002
@@ -24,34 +24,62 @@ export const ORGANIZATION_ERROR__INSUFFICIENT_ROLE = 0x1772; // 6002
 export const ORGANIZATION_ERROR__ORG_MISMATCH = 0x1773; // 6003
 /** MemberMismatch: Signer does not match membership.member */
 export const ORGANIZATION_ERROR__MEMBER_MISMATCH = 0x1774; // 6004
+/** SlugInvalid: Slug must be 1-32 bytes of [a-z0-9-] */
+export const ORGANIZATION_ERROR__SLUG_INVALID = 0x1775; // 6005
+/** NameTooLong: Name exceeds 96 bytes */
+export const ORGANIZATION_ERROR__NAME_TOO_LONG = 0x1776; // 6006
+/** MembershipNotActive: Target membership is not active */
+export const ORGANIZATION_ERROR__MEMBERSHIP_NOT_ACTIVE = 0x1777; // 6007
+/** AuthorityProtected: The organization authority's membership cannot be revoked or changed */
+export const ORGANIZATION_ERROR__AUTHORITY_PROTECTED = 0x1778; // 6008
+/** MemberCountOverflow: Organization member count overflowed */
+export const ORGANIZATION_ERROR__MEMBER_COUNT_OVERFLOW = 0x1779; // 6009
+/** NameEmpty: Name must not be empty */
+export const ORGANIZATION_ERROR__NAME_EMPTY = 0x177a; // 6010
 
 export type OrganizationError =
+  | typeof ORGANIZATION_ERROR__AUTHORITY_PROTECTED
   | typeof ORGANIZATION_ERROR__INSUFFICIENT_ROLE
+  | typeof ORGANIZATION_ERROR__MEMBER_COUNT_OVERFLOW
   | typeof ORGANIZATION_ERROR__MEMBER_MISMATCH
+  | typeof ORGANIZATION_ERROR__MEMBERSHIP_NOT_ACTIVE
   | typeof ORGANIZATION_ERROR__MEMBERSHIP_NOT_FOUND
   | typeof ORGANIZATION_ERROR__MEMBERSHIP_REVOKED
-  | typeof ORGANIZATION_ERROR__ORG_MISMATCH;
+  | typeof ORGANIZATION_ERROR__NAME_EMPTY
+  | typeof ORGANIZATION_ERROR__NAME_TOO_LONG
+  | typeof ORGANIZATION_ERROR__ORG_MISMATCH
+  | typeof ORGANIZATION_ERROR__SLUG_INVALID;
 
 let organizationErrorMessages: Record<OrganizationError, string> | undefined;
 if (process.env["NODE_ENV"] !== "production") {
   organizationErrorMessages = {
+    [ORGANIZATION_ERROR__AUTHORITY_PROTECTED]: `The organization authority's membership cannot be revoked or changed`,
     [ORGANIZATION_ERROR__INSUFFICIENT_ROLE]: `Role does not permit this action`,
+    [ORGANIZATION_ERROR__MEMBER_COUNT_OVERFLOW]: `Organization member count overflowed`,
     [ORGANIZATION_ERROR__MEMBER_MISMATCH]: `Signer does not match membership.member`,
-    [ORGANIZATION_ERROR__MEMBERSHIP_NOT_FOUND]: `Signer has no active membership in this organization`,
-    [ORGANIZATION_ERROR__MEMBERSHIP_REVOKED]: `Membership has been revoked`,
+    [ORGANIZATION_ERROR__MEMBERSHIP_NOT_ACTIVE]: `Target membership is not active`,
+    [ORGANIZATION_ERROR__MEMBERSHIP_NOT_FOUND]: `No membership account exists for the signer (reserved; Anchor reports AccountNotInitialized)`,
+    [ORGANIZATION_ERROR__MEMBERSHIP_REVOKED]: `Signer's membership has been revoked`,
+    [ORGANIZATION_ERROR__NAME_EMPTY]: `Name must not be empty`,
+    [ORGANIZATION_ERROR__NAME_TOO_LONG]: `Name exceeds 96 bytes`,
     [ORGANIZATION_ERROR__ORG_MISMATCH]: `Membership belongs to a different organization`,
+    [ORGANIZATION_ERROR__SLUG_INVALID]: `Slug must be 1-32 bytes of [a-z0-9-]`,
   };
 }
 
 export function getOrganizationErrorMessage(code: OrganizationError): string {
   if (process.env["NODE_ENV"] !== "production") {
-    return (organizationErrorMessages as Record<OrganizationError, string>)[code];
+    return (organizationErrorMessages as Record<OrganizationError, string>)[
+      code
+    ];
   }
 
   return "Error message not available in production bundles.";
 }
 
-export function isOrganizationError<TProgramErrorCode extends OrganizationError>(
+export function isOrganizationError<
+  TProgramErrorCode extends OrganizationError,
+>(
   error: unknown,
   transactionMessage: {
     instructions: Record<number, { programAddress: Address }>;

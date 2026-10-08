@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ResultRecord } from "@spiral-backbone/protocol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { frozenPlanSchema, planPath } from "../h2/plan";
 import { csv, markdownTable } from "./render";
 import { generateReport, latestRunId } from "./run";
@@ -184,6 +184,77 @@ describe("generateReport", () => {
 });
 
 describe("H2 section", () => {
+  const h2Fixture = (results: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), "report-in-"));
+    const run = "2026-10-06T12:00:00Z-h2-dup";
+    writeFileSync(join(dir, "h2.ndjson"), results.join(""));
+    writeFileSync(
+      join(dir, "h2-blocks.ndjson"),
+      lines([
+        {
+          run_id: run,
+          block_index: 0,
+          block_name: "replicas=1",
+          generation: 1,
+          phase: "end",
+          check_number: 1,
+          intended_active: ["r1"],
+          observed: [],
+          missing_providers: {},
+          confirmed: true,
+          reasons: [],
+          at: "t",
+        },
+      ]),
+    );
+    const plansDir = writeH2Plan(run, [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+    ]);
+    const h2 = (o: Partial<ResultRecord> = {}) =>
+      rec({ run_id: run, hypothesis: "H2", scenario: "replicas=1@g1", method: "direct", ...o });
+    return { dir, plansDir, h2, run };
+  };
+
+  it("fails on a duplicate result and names its key", async () => {
+    const { h2 } = h2Fixture([]);
+    const { dir, plansDir, run } = h2Fixture([
+      lines([h2(), h2({ work_id: "pd-002" }), h2({ latency_ms: 5 })]),
+    ]);
+    await expect(
+      generateReport({ resultsDir: dir, outDir: mkdtempSync(join(tmpdir(), "o-")), plansDir }),
+    ).rejects.toThrow(
+      `duplicate H2 result (run_id ${run}, scenario replicas=1@g1, work_id pd-001, method direct, attempt 1) appears 2 times`,
+    );
+  });
+
+  it("checks duplicates only within the reported run", async () => {
+    const { h2 } = h2Fixture([]);
+    const older = { run_id: "2026-10-01T12:00:00Z-h2-old" };
+    const { dir, plansDir } = h2Fixture([lines([h2(older), h2(older), h2()])]);
+    await expect(
+      generateReport({ resultsDir: dir, outDir: mkdtempSync(join(tmpdir(), "o-")), plansDir }),
+    ).resolves.toBeDefined();
+  });
+
+  it("does not point H1 users at eval:h2 for a truncated H1 file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "report-in-"));
+    writeFileSync(join(dir, "h1.ndjson"), `${lines([rec({})])}{"run_id":"2026`);
+    const error = await generateReport({
+      resultsDir: dir,
+      outDir: mkdtempSync(join(tmpdir(), "o-")),
+    }).catch((e: unknown) => e as Error);
+    expect((error as Error).message).toMatch(/h1\.ndjson:2: truncated final line/);
+    expect((error as Error).message).not.toMatch(/eval:h2|--resume/);
+  });
+
+  it("refuses a results file with a truncated final line and says how to recover", async () => {
+    const { h2 } = h2Fixture([]);
+    const { dir, plansDir } = h2Fixture([lines([h2()]), '{"run_id":"2026-10']);
+    await expect(
+      generateReport({ resultsDir: dir, outDir: mkdtempSync(join(tmpdir(), "o-")), plansDir }),
+    ).rejects.toThrow(/h2\.ndjson:2: truncated final line .*eval:h2 run --resume/);
+  });
+
   it("emits the H2 section with status line and CSVs", async () => {
     const results = mkdtempSync(join(tmpdir(), "report-in-"));
     const out = mkdtempSync(join(tmpdir(), "report-out-"));
@@ -253,6 +324,12 @@ describe("H2 section", () => {
     expect(md).toContain(
       "**Success with 1 active replica: 100.00% (1 of 1, excluding 0 external_cache) — criterion ≥ 95%: met**\n",
     );
+    expect(md).toContain(
+      "**Direct-only success with 1 active replica: 100.00% (1 of 1, excluding 0 external_cache) — criterion ≥ 95%: met**\n",
+    );
+    expect(md).toContain(
+      "**Direct success with 1 active replica: 1 of 1 (100.00%) — recovery operational: yes**\n",
+    );
     expect(md).toContain("### By active replicas");
     expect(md).toContain("| active_replicas |");
     expect(md).toContain("| 1 | direct | 1 | 1 | 0 | 100.0% |");
@@ -271,6 +348,7 @@ describe("H2 section", () => {
     expect(md).toContain("Attempts excluded (end-of-block replica state not confirmed): 1");
     expect(md).not.toContain("no end-of-block state check recorded");
     expect(md).not.toContain("this refutes H2");
+    expect(md).not.toContain("Generations beyond the campaign limit");
     expect(md).toContain(
       "### Failures\n\nNo failures.\n\n\n### Direct provenance audit\n\nDirect successes audited: 1\n\n| metric | min | median | p95 | max |\n|---|---|---|---|---|\n| unattributed_bytes | 158 | 158 | 158 | 158 |\n| unattributed_pct_of_dag | 0.02 | 0.02 | 0.02 | 0.02 |\n",
     );
@@ -285,6 +363,61 @@ describe("H2 section", () => {
       "h2-provenance-audit.csv",
       "h2-rates.csv",
     ]);
+  });
+
+  it("shows generations run beyond the campaign limit and judges a retried end by its last try", async () => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const out = mkdtempSync(join(tmpdir(), "report-out-"));
+    const run = "2026-10-06T12:00:00Z-h2-extra";
+    const check = (generation: number, check_number: number, confirmed: boolean) => ({
+      run_id: run,
+      block_index: 0,
+      block_name: "replicas=1",
+      generation,
+      phase: "end",
+      check_number,
+      intended_active: ["r1"],
+      observed: [],
+      missing_providers: confirmed ? {} : { c: ["r1"] },
+      confirmed,
+      reasons: confirmed ? [] : ["c: no provider record from r1"],
+      at: "t",
+    });
+    writeFileSync(
+      join(results, "h2.ndjson"),
+      lines([
+        rec({ run_id: run, hypothesis: "H2", scenario: "replicas=1@g1", method: "direct" }),
+        rec({ run_id: run, hypothesis: "H2", scenario: "replicas=1@g2", method: "direct" }),
+      ]),
+    );
+    writeFileSync(
+      join(results, "h2-blocks.ndjson"),
+      lines([
+        check(1, 1, false),
+        check(1, 2, false),
+        {
+          run_id: run,
+          block_index: 0,
+          block_name: "replicas=1",
+          generation: 2,
+          phase: "extra_generation",
+          max_block_generations: 1,
+          intended_active: ["r1"],
+          reason: "resumed with --allow-extra-generation after generation 1 ended unconfirmed",
+          at: "t",
+        },
+        check(2, 1, false),
+        check(2, 2, true),
+      ]),
+    );
+    const plansDir = writeH2Plan(run, [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+    ]);
+    const { markdownPath } = await generateReport({ resultsDir: results, outDir: out, plansDir });
+    const md = readFileSync(markdownPath, "utf8");
+    expect(md).toContain("Generations beyond the campaign limit: 1 (block replicas=1@g2)\n");
+    expect(md).toContain("Attempts excluded (end-of-block replica state not confirmed): 1");
+    expect(md).toContain("| replicas=1 | direct | 1 | 1 | 0 | 100.0% |");
   });
 
   const auditRun = "2026-10-06T12:00:00Z-h2-audit";
@@ -595,5 +728,338 @@ describe("run completeness", () => {
     expect(md).toContain("**INCOMPLETE**");
     expect(md).toContain("0 of 2");
     expect(md).toContain("| error | ECONNREFUSED |");
+  });
+});
+
+describe("run selection and version mixing", () => {
+  const A = "2026-10-02T12:00:00Z-h1-a";
+  const B = "2026-10-03T12:00:00Z-h1-b";
+  const setup = (rows: ResultRecord[]) => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const out = mkdtempSync(join(tmpdir(), "report-out-"));
+    writeFileSync(join(results, "h1.ndjson"), lines(rows));
+    return { results, out };
+  };
+
+  it("selects the run named by runIds instead of the latest", async () => {
+    const { results, out } = setup([
+      rec({ run_id: A, work_id: "pd-a" }),
+      rec({ run_id: B, work_id: "pd-b" }),
+    ]);
+    const latest = readFileSync(
+      (await generateReport({ resultsDir: results, outDir: out })).markdownPath,
+      "utf8",
+    );
+    expect(latest).toContain("pd-b");
+    const picked = readFileSync(
+      (await generateReport({ resultsDir: results, outDir: out, runIds: { h1: A } })).markdownPath,
+      "utf8",
+    );
+    expect(picked).toContain("pd-a");
+    expect(picked).not.toContain("pd-b");
+  });
+
+  it("refuses an H4 run id that the sidecar does not hold", async () => {
+    const { results, out } = setup([]);
+    writeFileSync(join(results, "h4.run.json"), JSON.stringify({ run_id: "r4-a", backfill: null }));
+    await expect(
+      generateReport({ resultsDir: results, outDir: out, runIds: { h4: "r4-b" } }),
+    ).rejects.toThrow("H4 run r4-b not found");
+  });
+
+  it("warns under the heading when included records mix artifact versions", async () => {
+    const { results, out } = setup([
+      rec({ run_id: A, artifact_versions: { film: "0.1.0@aaa" } }),
+      rec({ run_id: A, attempt: 2, artifact_versions: { film: "0.2.0@bbb" } }),
+    ]);
+    const md = readFileSync(
+      (await generateReport({ resultsDir: results, outDir: out })).markdownPath,
+      "utf8",
+    );
+    expect(md).toContain(
+      "## H1 — Integridade da representação registrada\n\n**WARNING: mixed artifact versions in this run: " +
+        '{"film":"0.1.0@aaa"}, {"film":"0.2.0@bbb"}**\n',
+    );
+  });
+
+  it("does not warn when the versions agree", async () => {
+    const { results, out } = setup([
+      rec({ run_id: A, artifact_versions: { film: "0.1.0@aaa" } }),
+      rec({ run_id: A, attempt: 2, artifact_versions: { film: "0.1.0@aaa" } }),
+    ]);
+    const md = readFileSync(
+      (await generateReport({ resultsDir: results, outDir: out })).markdownPath,
+      "utf8",
+    );
+    expect(md).not.toContain("mixed artifact versions");
+  });
+});
+
+describe("run selection for H2, H3 and H4", () => {
+  const dirs = () => ({
+    results: mkdtempSync(join(tmpdir(), "report-in-")),
+    out: mkdtempSync(join(tmpdir(), "report-out-")),
+  });
+  const read = async (options: Parameters<typeof generateReport>[0]) =>
+    readFileSync((await generateReport(options)).markdownPath, "utf8");
+
+  it("selects an H2 run by id, using that run's plan and block log", async () => {
+    const { results, out } = dirs();
+    const [old, latest] = ["2026-10-05T12:00:00Z-h2-old", "2026-10-06T12:00:00Z-h2-new"];
+    const end = (run_id: string) => ({
+      run_id,
+      block_index: 0,
+      block_name: "replicas=1",
+      generation: 1,
+      phase: "end",
+      check_number: 1,
+      intended_active: ["r1"],
+      observed: [],
+      missing_providers: {},
+      confirmed: true,
+      reasons: [],
+      at: "t",
+    });
+    const h2 = (run_id: string, work_id: string) =>
+      rec({ run_id, hypothesis: "H2", scenario: "replicas=1@g1", method: "direct", work_id });
+    writeFileSync(
+      join(results, "h2.ndjson"),
+      lines([h2(old, "pd-old"), h2(latest, "pd-new"), h2(latest, "pd-new2")]),
+    );
+    writeFileSync(join(results, "h2-blocks.ndjson"), lines([end(old), end(latest)]));
+    const plansDir = writeH2Plan(latest, [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+    ]);
+    const oldPlans = writeH2Plan(old, [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+    ]);
+    writeFileSync(planPath(plansDir, old), readFileSync(planPath(oldPlans, old)));
+    expect(await read({ resultsDir: results, outDir: out, plansDir })).toContain(
+      `Run: \`${latest}\``,
+    );
+    const picked = await read({ resultsDir: results, outDir: out, plansDir, runIds: { h2: old } });
+    expect(picked).toContain(`Run: \`${old}\``);
+    expect(picked).toContain("Attempts included: 1 ");
+  });
+
+  it("selects an H3 run by id", async () => {
+    const { results, out } = dirs();
+    const [old, latest] = ["2026-10-01T12:00:00Z-h3-old", "2026-10-02T12:00:00Z-h3-new"];
+    const h3 = (run_id: string) =>
+      rec({ run_id, hypothesis: "H3", work_id: "h3-s3", scenario: "s3-reader-role" });
+    writeFileSync(join(results, "h3.ndjson"), lines([h3(old), h3(latest)]));
+    expect(await read({ resultsDir: results, outDir: out })).toContain(`Run: \`${latest}\``);
+    expect(await read({ resultsDir: results, outDir: out, runIds: { h3: old } })).toContain(
+      `Run: \`${old}\``,
+    );
+  });
+
+  it("accepts the H4 run id the sidecar holds", async () => {
+    const { results, out } = dirs();
+    writeFileSync(join(results, "h4.run.json"), JSON.stringify({ run_id: "r4-a", backfill: null }));
+    expect(await read({ resultsDir: results, outDir: out, runIds: { h4: "r4-a" } })).toContain(
+      "Run: `r4-a`",
+    );
+  });
+
+  it("refuses an H4 run id when there is no H4 sidecar at all", async () => {
+    const { results, out } = dirs();
+    await expect(
+      generateReport({ resultsDir: results, outDir: out, runIds: { h4: "r4-x" } }),
+    ).rejects.toThrow("H4 run r4-x not found");
+  });
+});
+
+describe("report command flags", () => {
+  const freshCommand = async () => {
+    vi.resetModules();
+    return (await import("./command")).reportCommand;
+  };
+  const setup = () => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const out = mkdtempSync(join(tmpdir(), "report-out-"));
+    return { results, out };
+  };
+
+  it("passes --run-h1 to --run-h4 through to run selection", async () => {
+    const { results, out } = setup();
+    const ids = {
+      h1: "2026-10-01T12:00:00Z-h1-old",
+      h3: "2026-10-01T12:00:00Z-h3-old",
+      h4: "r4-a",
+    };
+    writeFileSync(
+      join(results, "h1.ndjson"),
+      lines([rec({ run_id: ids.h1, work_id: "pd-old" }), rec({ work_id: "pd-new" })]),
+    );
+    const h3 = (run_id: string) =>
+      rec({ run_id, hypothesis: "H3", work_id: "h3-s3", scenario: "s3-reader-role" });
+    writeFileSync(
+      join(results, "h3.ndjson"),
+      lines([h3(ids.h3), h3("2026-10-02T12:00:00Z-h3-new")]),
+    );
+    writeFileSync(join(results, "h4.run.json"), JSON.stringify({ run_id: ids.h4, backfill: null }));
+    const command = await freshCommand();
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    process.exitCode = undefined;
+    await command.parseAsync(
+      [
+        "--results-dir",
+        results,
+        "--out-dir",
+        out,
+        "--run-h1",
+        ids.h1,
+        "--run-h3",
+        ids.h3,
+        "--run-h4",
+        ids.h4,
+      ],
+      { from: "user" },
+    );
+    log.mockRestore();
+    expect(process.exitCode).toBeUndefined();
+    const md = readFileSync(join(out, "report.md"), "utf8");
+    expect(md).toContain(`Run: \`${ids.h1}\``);
+    expect(md).toContain(`Run: \`${ids.h3}\``);
+    expect(md).toContain(`Run: \`${ids.h4}\``);
+  });
+
+  it("passes --run-h2 through and fails when that run has no frozen plan", async () => {
+    const { results, out } = setup();
+    writeFileSync(
+      join(results, "h2.ndjson"),
+      lines([rec({ run_id: "2026-10-06T12:00:00Z-h2-a", hypothesis: "H2", scenario: "b@g1" })]),
+    );
+    const command = await freshCommand();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = undefined;
+    await command.parseAsync(
+      ["--results-dir", results, "--out-dir", out, "--plans-dir", out, "--run-h2", "wanted-h2"],
+      { from: "user" },
+    );
+    const output = err.mock.calls.flat().join("\n");
+    err.mockRestore();
+    expect(process.exitCode).toBe(1);
+    expect(output).toMatch(/Report failed: .*wanted-h2/);
+    process.exitCode = undefined;
+  });
+
+  it("exits 1 naming the run when --run-h4 has no sidecar", async () => {
+    const { results, out } = setup();
+    const command = await freshCommand();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = undefined;
+    await command.parseAsync(["--results-dir", results, "--out-dir", out, "--run-h4", "r4-x"], {
+      from: "user",
+    });
+    const output = err.mock.calls.flat().join("\n");
+    err.mockRestore();
+    expect(process.exitCode).toBe(1);
+    expect(output).toContain("r4-x");
+    process.exitCode = undefined;
+  });
+});
+
+describe("mixed artifact versions in H2, H3 and H4", () => {
+  const warning = "mixed artifact versions in this run";
+  const v = (film: string) => ({ film });
+
+  it("H2 counts only attempts in confirmed generations", async () => {
+    const run = "2026-10-06T12:00:00Z-h2-mix";
+    const end = (generation: number, confirmed: boolean) => ({
+      run_id: run,
+      block_index: 0,
+      block_name: "replicas=1",
+      generation,
+      phase: "end",
+      check_number: 1,
+      intended_active: ["r1"],
+      observed: [],
+      missing_providers: {},
+      confirmed,
+      reasons: [],
+      at: "t",
+    });
+    const h2 = (scenario: string, attempt: number, film: string) =>
+      rec({
+        run_id: run,
+        hypothesis: "H2",
+        scenario,
+        method: "direct",
+        attempt,
+        artifact_versions: v(film),
+      });
+    const report = async (records: ResultRecord[]) => {
+      const results = mkdtempSync(join(tmpdir(), "report-in-"));
+      writeFileSync(join(results, "h2.ndjson"), lines(records));
+      writeFileSync(join(results, "h2-blocks.ndjson"), lines([end(1, false), end(2, true)]));
+      const plansDir = writeH2Plan(run, [
+        { name: "replicas=1", kind: "degradation", active: ["r1"] },
+      ]);
+      const { markdownPath } = await generateReport({
+        resultsDir: results,
+        outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+        plansDir,
+      });
+      return readFileSync(markdownPath, "utf8");
+    };
+    expect(
+      await report([
+        h2("replicas=1@g1", 1, "old"),
+        h2("replicas=1@g2", 1, "new"),
+        h2("replicas=1@g2", 2, "new"),
+      ]),
+    ).not.toContain(warning);
+    expect(
+      await report([h2("replicas=1@g2", 1, "new"), h2("replicas=1@g2", 2, "newer")]),
+    ).toContain(`**WARNING: ${warning}: {"film":"new"}, {"film":"newer"}**`);
+  });
+
+  it("H3 warns on mixed versions", async () => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const h3 = (scenario: string, film: string) =>
+      rec({
+        run_id: "2026-10-02T12:00:00Z-h3-mix",
+        hypothesis: "H3",
+        work_id: "h3-s3",
+        scenario,
+        artifact_versions: v(film),
+      });
+    writeFileSync(
+      join(results, "h3.ndjson"),
+      lines([h3("s3-reader-role", "a"), h3("s1-no-membership", "b")]),
+    );
+    const { markdownPath } = await generateReport({
+      resultsDir: results,
+      outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+    });
+    expect(readFileSync(markdownPath, "utf8")).toContain(warning);
+  });
+
+  it("H4 warns on mixed versions", async () => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const run = "2026-10-02T12:00:00Z-h4-mix";
+    const h4 = (work_id: string, film: string) =>
+      rec({ run_id: run, hypothesis: "H4", work_id, artifact_versions: v(film) });
+    writeFileSync(join(results, "h4.ndjson"), lines([h4("pd-1", "a"), h4("pd-2", "b")]));
+    writeFileSync(join(results, "h4.run.json"), JSON.stringify({ run_id: run, backfill: null }));
+    const { markdownPath } = await generateReport({
+      resultsDir: results,
+      outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+    });
+    expect(readFileSync(markdownPath, "utf8")).toContain(warning);
+  });
+
+  it("emits no blank line when versions agree", async () => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    writeFileSync(join(results, "h1.ndjson"), lines([rec({})]));
+    const { markdownPath } = await generateReport({
+      resultsDir: results,
+      outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+    });
+    expect(readFileSync(markdownPath, "utf8")).toContain(
+      "## H1 — Integridade da representação registrada\n\nRun:",
+    );
   });
 });

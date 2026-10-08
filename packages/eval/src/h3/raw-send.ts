@@ -30,34 +30,40 @@ export async function sendRawSkipPreflight(
   );
   const transaction = await signTransactionMessageWithSigners(message);
   const signature = getSignatureFromTransaction(transaction);
-  try {
-    await rpc
-      .sendTransaction(getBase64EncodedWireTransaction(transaction), {
-        encoding: "base64",
-        skipPreflight: true,
-      })
-      .send();
-  } catch (error) {
-    return { signature: null, sendError: (error as Error).message, err: null, logs: [] };
-  }
-  const deadline = Date.now() + (options.timeoutMs ?? 60_000);
+  await rpc
+    .sendTransaction(getBase64EncodedWireTransaction(transaction), {
+      encoding: "base64",
+      skipPreflight: true,
+    })
+    .send();
+  const deadline = Date.now() + (options.timeoutMs ?? 90_000);
+  let expired = false;
   while (Date.now() < deadline) {
-    const tx = await rpc
-      .getTransaction(signature, {
-        commitment: "confirmed",
-        encoding: "json",
-        maxSupportedTransactionVersion: 0,
-      })
-      .send();
+    const tx = await fetchTransaction(rpc, signature);
     if (tx) {
       return {
         signature,
-        sendError: null,
         err: tx.meta?.err ?? null,
         logs: [...(tx.meta?.logMessages ?? [])],
       };
     }
-    await new Promise((resolve) => setTimeout(resolve, options.pollMs ?? 500));
+    if (expired) break;
+    const height = await rpc.getBlockHeight({ commitment: "confirmed" }).send();
+    expired = height > blockhash.lastValidBlockHeight;
+    if (!expired) await new Promise((resolve) => setTimeout(resolve, options.pollMs ?? 500));
   }
-  return { signature, sendError: "not confirmed within timeout", err: null, logs: [] };
+  throw new Error(`transaction expired without landing (${signature})`);
+}
+
+function fetchTransaction(
+  rpc: SolanaRpc,
+  signature: ReturnType<typeof getSignatureFromTransaction>,
+) {
+  return rpc
+    .getTransaction(signature, {
+      commitment: "confirmed",
+      encoding: "json",
+      maxSupportedTransactionVersion: 0,
+    })
+    .send();
 }

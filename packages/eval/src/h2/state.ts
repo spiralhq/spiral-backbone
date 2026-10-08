@@ -28,7 +28,7 @@ export interface ReplicaController {
 }
 
 export interface ProviderProbe {
-  providers(cid: string): Promise<Set<string>>;
+  providers(cid: string, want: ReadonlySet<string>): Promise<Set<string>>;
   liveness?: () => Promise<void>;
 }
 
@@ -59,7 +59,7 @@ export function sshReplicaController(
 
 export function networkProviderProbe(topology: Topology, timeoutMs: number): ProviderProbe {
   return {
-    providers: (cid) => findProviderIds(topology.network_node.api_url, cid, timeoutMs),
+    providers: (cid, want) => findProviderIds(topology.network_node.api_url, cid, timeoutMs, want),
     liveness: () => assertNetworkNodeAlive(topology.network_node.api_url, 10_000),
   };
 }
@@ -73,6 +73,32 @@ export async function applyState(
     if (intended.includes(node)) await controller.start(node);
     else await controller.stop(node);
   }
+}
+
+export const PROVIDER_LOOKUP_CONCURRENCY = 5;
+
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+export function nodeDrift(intended: string[], observed: NodeObservation[]): boolean {
+  return observed.some((obs) => {
+    const shouldBeOn = intended.includes(obs.node);
+    return obs.systemd_active !== shouldBeOn || obs.swarm_reachable !== shouldBeOn;
+  });
 }
 
 export function decideState(input: {
@@ -122,10 +148,14 @@ export async function checkState(
 ): Promise<StateCheck> {
   await probe.liveness?.();
   const observed = await Promise.all(topology.replicas.map((r) => controller.observe(r.name)));
+  const peerIdByNode = Object.fromEntries(topology.replicas.map((r) => [r.name, r.peer_id]));
   const providersByCid: Record<string, Set<string>> = {};
   if (intended.length > 0) {
-    for (const cid of cids) providersByCid[cid] = await probe.providers(cid);
+    const want = new Set(intended.map((node) => peerIdByNode[node] ?? ""));
+    const found = await mapLimit(cids, PROVIDER_LOOKUP_CONCURRENCY, (cid) =>
+      probe.providers(cid, want),
+    );
+    cids.forEach((cid, i) => (providersByCid[cid] = found[i]!));
   }
-  const peerIdByNode = Object.fromEntries(topology.replicas.map((r) => [r.name, r.peer_id]));
   return decideState({ intended, observed, providersByCid, peerIdByNode });
 }

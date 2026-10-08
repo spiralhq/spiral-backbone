@@ -1,10 +1,16 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { InventoryRecord, ResultRecord } from "@spiral-backbone/protocol";
 import { describe, expect, it } from "vitest";
 import { readGolden } from "./golden";
-import { appendResult, readJsonLines, toJsonLine } from "./ndjson";
+import {
+  appendResult,
+  readJsonLines,
+  recoverTruncatedTail,
+  toJsonLine,
+  TruncatedTailError,
+} from "./ndjson";
 import { makeRunId } from "./run-id";
 import { sidecarPath } from "./sidecar";
 import { markRunCompleted, markRunStarted, runStatusSchema } from "./run-status";
@@ -103,6 +109,71 @@ describe("NDJSON", () => {
     const path = join(dir(), "bad.ndjson");
     writeFileSync(path, `${JSON.stringify(result())}\n{not json\n`);
     await expect(readJsonLines(path, resultRecordSchema)).rejects.toThrow(/bad\.ndjson:2/);
+  });
+
+  it("refuses a truncated final line and says how to recover", async () => {
+    const path = join(dir(), "h2.ndjson");
+    writeFileSync(path, `${JSON.stringify(result())}\n{"run_id":"2026-10`);
+    const error = await readJsonLines(path, resultRecordSchema).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TruncatedTailError);
+    expect((error as Error).message).toMatch(/h2\.ndjson:2: truncated final line .*partial-/);
+    expect((error as Error).message).not.toMatch(/eval:h2|--resume/);
+  });
+
+  it("still throws on a truncated line that is not the last", async () => {
+    const path = join(dir(), "h2.ndjson");
+    writeFileSync(path, `{"run_id":"2026-10\n${JSON.stringify(result())}\n`);
+    const error = await readJsonLines(path, resultRecordSchema).catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(TruncatedTailError);
+    expect((error as Error).message).toMatch(/h2\.ndjson:1: invalid JSON/);
+  });
+});
+
+describe("recoverTruncatedTail", () => {
+  it("moves an unparseable final line without a newline aside and logs it", async () => {
+    const d = dir();
+    const path = join(d, "h2.ndjson");
+    const good = `${JSON.stringify(result())}\n`;
+    writeFileSync(path, `${good}{"run_id":"2026-10`);
+    const logs: string[] = [];
+    const moved = await recoverTruncatedTail(
+      path,
+      (m) => logs.push(m),
+      () => "20261008T100000Z",
+    );
+    expect(moved).toBe(`${path}.partial-20261008T100000Z`);
+    expect(readFileSync(path, "utf8")).toBe(good);
+    expect(readFileSync(moved!, "utf8")).toBe('{"run_id":"2026-10');
+    expect(logs).toEqual([`${path}: truncated final line (18 bytes) moved to ${moved}`]);
+    expect(await readJsonLines(path, resultRecordSchema)).toHaveLength(1);
+  });
+
+  it("leaves complete files and missing files alone", async () => {
+    const d = dir();
+    const path = join(d, "h2.ndjson");
+    expect(await recoverTruncatedTail(path, () => {})).toBeNull();
+    writeFileSync(path, `${JSON.stringify(result())}\n`);
+    expect(await recoverTruncatedTail(path, () => {})).toBeNull();
+    writeFileSync(path, "");
+    expect(await recoverTruncatedTail(path, () => {})).toBeNull();
+    expect(readdirSync(d)).toEqual(["h2.ndjson"]);
+  });
+
+  it("terminates a final line that parses but lacks its newline", async () => {
+    const path = join(dir(), "h2.ndjson");
+    writeFileSync(path, JSON.stringify(result()));
+    const logs: string[] = [];
+    expect(await recoverTruncatedTail(path, (m) => logs.push(m))).toBeNull();
+    expect(readFileSync(path, "utf8")).toBe(`${JSON.stringify(result())}\n`);
+    expect(logs).toEqual([`${path}: final line lacked its newline; terminated it`]);
+  });
+
+  it("does not touch a truncated line that is not the last", async () => {
+    const path = join(dir(), "h2.ndjson");
+    const text = `{"run_id":"2026-10\n${JSON.stringify(result())}\n`;
+    writeFileSync(path, text);
+    expect(await recoverTruncatedTail(path, () => {})).toBeNull();
+    expect(readFileSync(path, "utf8")).toBe(text);
   });
 });
 

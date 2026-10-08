@@ -94,3 +94,12 @@ export function statusLine(
     return `Status: **INCOMPLETE** — run did not finish (${recorded} of ${expected} expected attempts ${countLabel})\n`;
   return "Status: unknown (no run-status sidecar)\n";
 }
+
+export function mixedVersionsWarning(records: ResultRecord[]): string | undefined {
+  const sorted = (v: Record<string, string>) =>
+    JSON.stringify(Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))));
+  const distinct = [...new Set(records.map((r) => sorted(r.artifact_versions)))].sort();
+  return distinct.length > 1
+    ? `**WARNING: mixed artifact versions in this run: ${distinct.join(", ")}**\n`
+    : undefined;
+}

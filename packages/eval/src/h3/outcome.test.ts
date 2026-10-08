@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { failingProgram, judge, parseInstructionError, type RawSendResult } from "./outcome";
-import { H3_SCENARIOS } from "./scenarios";
+import { H3_SCENARIOS, REFUSING_PROGRAM_ADDRESS } from "./scenarios";
 
 const reader = H3_SCENARIOS.find((s) => s.key === "reader-role")!;
-const confirmed = (err: unknown): RawSendResult => ({
+const ORGANIZATION = REFUSING_PROGRAM_ADDRESS.organization;
+const FILM = REFUSING_PROGRAM_ADDRESS.film;
+const refusedBy = (program: string) => [
+  `Program ${FILM} invoke [1]`,
+  `Program ${ORGANIZATION} invoke [2]`,
+  `Program ${program} failed: custom program error: 0x1772`,
+  `Program ${FILM} failed: custom program error: 0x1772`,
+];
+const confirmed = (err: unknown, logs: string[] = refusedBy(ORGANIZATION)): RawSendResult => ({
   signature: "sig",
-  sendError: null,
   err,
-  logs: [],
+  logs,
 });
 
 describe("H3_SCENARIOS", () => {
@@ -57,7 +64,7 @@ describe("failingProgram", () => {
 });
 
 describe("judge", () => {
-  it("succeeds only on the expected code at instruction 0", () => {
+  it("succeeds only on the expected code at instruction 0 from the expected program", () => {
     expect(judge(reader, confirmed({ InstructionError: [0, { Custom: 6002 }] })).outcome).toBe(
       "success",
     );
@@ -79,26 +86,43 @@ describe("judge", () => {
     );
   });
 
-  it("fails when the refusal happened before the chain (no signature on record)", () => {
-    const verdict = judge(reader, {
-      signature: null,
-      sendError: "Blockhash not found",
-      err: null,
-      logs: [],
-    });
-    expect(verdict).toMatchObject({
+  it("fails when another program refused with the expected code", () => {
+    expect(
+      judge(reader, confirmed({ InstructionError: [0, { Custom: 6002 }] }, refusedBy(FILM))),
+    ).toMatchObject({
       outcome: "failure",
-      reason: expect.stringMatching(/before reaching the chain/),
+      observed: { index: 0, code: 6002 },
+      reason: expect.stringMatching(/expected organization .* to refuse, got /),
     });
   });
 
-  it("fails when the transaction never confirmed", () => {
-    const verdict = judge(reader, {
-      signature: "sig",
-      sendError: "not confirmed within timeout",
-      err: null,
-      logs: [],
+  it("fails when non-empty logs name no failing program", () => {
+    expect(
+      judge(
+        reader,
+        confirmed({ InstructionError: [0, { Custom: 6002 }] }, [`Program ${FILM} invoke [1]`]),
+      ),
+    ).toMatchObject({
+      outcome: "failure",
+      reason: expect.stringMatching(/no failing program in the logs/),
     });
-    expect(verdict.outcome).toBe("failure");
+  });
+
+  it("throws, as a provider fault, when a failed transaction has empty or missing logs", () => {
+    const err = { InstructionError: [0, { Custom: 6002 }] };
+    expect(() => judge(reader, confirmed(err, []))).toThrow(/logs/);
+    expect(() => judge(reader, { signature: "sig", err, logs: undefined as never })).toThrow(
+      /logs/,
+    );
+  });
+
+  it("checks each scenario against its own refusing program", () => {
+    for (const scenario of H3_SCENARIOS) {
+      const err = { InstructionError: [0, { Custom: scenario.expectedCode }] };
+      const own = REFUSING_PROGRAM_ADDRESS[scenario.refusingProgram];
+      const other = own === ORGANIZATION ? FILM : ORGANIZATION;
+      expect(judge(scenario, confirmed(err, refusedBy(own))).outcome).toBe("success");
+      expect(judge(scenario, confirmed(err, refusedBy(other))).outcome).toBe("failure");
+    }
   });
 });

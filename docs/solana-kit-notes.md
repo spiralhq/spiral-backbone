@@ -45,12 +45,19 @@ PDA-derivable accounts, Codama doesn't default these two — confirmed for both
 
 Codama only auto-generates a `find{Name}Pda` for an account when the IDL's `pda` field
 expresses its seeds. `organization.json` has 8 such entries (`findOrganizationPda`,
-`findMembershipPda`, `findAdminMembershipPda` all generated). `film.json` has none — Film's
-PDA seed is `sha256(cid[..cidLen])`, which Anchor's IDL seed DSL can't express (no
+`findMembershipPda`, `findAdminMembershipPda` all generated). Film's PDA seed is
+`sha256(cid[..cidLen])`, which Anchor's IDL seed DSL can't express (no
 Borsh-length-prefix-aware slicing) — so `findFilmPda` (`packages/protocol/src/pda.ts`) is
 hand-written and hand-verified against a real generated PDA value instead. The same gap means
 `film`'s `register_film` only gets a sync `getRegisterFilmInstruction`, not an `...Async`
 variant — callers must resolve `film`/`eventAuthority` themselves.
+
+`film.json` does carry `pda` metadata for the `membership` account of `declare_replica`,
+`deactivate_replica` and `update_access_policy` (seeds `["membership", organization,
+authority]` under `organization_program`), so those three get `...Async` builders that derive
+it correctly. The same metadata also makes Codama emit a `findMembershipPda` in
+`generated/film` whose default program address is the **film** program — wrong for direct
+use. Derive memberships with the organization finder re-exported from `@spiral-backbone/protocol`.
 
 ## `renderVisitor`'s default output layout
 

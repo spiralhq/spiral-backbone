@@ -46,7 +46,7 @@ import {
   getGrantMembershipInstructionAsync,
   getInitializeOrganizationInstructionAsync,
   getRevokeMembershipInstructionAsync,
-  getTransferAuthorityInstruction,
+  getTransferAuthorityInstructionAsync,
   getUpdateRoleInstructionAsync,
   parseAssertCanSubmitInstruction,
   parseGrantMembershipInstruction,
@@ -64,10 +64,15 @@ import {
   type ParsedTransferAuthorityInstruction,
   type ParsedUpdateRoleInstruction,
   type RevokeMembershipAsyncInput,
-  type TransferAuthorityInput,
+  type TransferAuthorityAsyncInput,
   type UpdateRoleAsyncInput,
 } from "../instructions";
-import { findAdminMembershipPda, findMembershipPda, findOrganizationPda } from "../pdas";
+import {
+  findAdminMembershipPda,
+  findMembershipPda,
+  findNewAuthorityMembershipPda,
+  findOrganizationPda,
+} from "../pdas";
 
 export const ORGANIZATION_PROGRAM_ADDRESS =
   "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw" as Address<"2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw">;
@@ -103,20 +108,45 @@ export function identifyOrganizationAccount(
   ) {
     return OrganizationAccount.Organization;
   }
-  throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_ACCOUNT, {
-    accountData: data,
-    programName: "organization",
-  });
+  throw new SolanaError(
+    SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_ACCOUNT,
+    { accountData: data, programName: "organization" },
+  );
 }
 
 export enum OrganizationEvent {
+  AuthorityTransferred,
+  MembershipGranted,
   MembershipRevoked,
+  MembershipRoleUpdated,
 }
 
 export function identifyOrganizationEvent(
   event: { data: ReadonlyUint8Array } | ReadonlyUint8Array,
 ): OrganizationEvent {
   const data = "data" in event ? event.data : event;
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([245, 109, 179, 54, 135, 92, 22, 64]),
+      ),
+      0,
+    )
+  ) {
+    return OrganizationEvent.AuthorityTransferred;
+  }
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([161, 171, 234, 116, 7, 70, 134, 251]),
+      ),
+      0,
+    )
+  ) {
+    return OrganizationEvent.MembershipGranted;
+  }
   if (
     containsBytes(
       data,
@@ -128,7 +158,20 @@ export function identifyOrganizationEvent(
   ) {
     return OrganizationEvent.MembershipRevoked;
   }
-  throw new Error("The provided event could not be identified as a organization event.");
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([194, 101, 249, 97, 41, 29, 202, 81]),
+      ),
+      0,
+    )
+  ) {
+    return OrganizationEvent.MembershipRoleUpdated;
+  }
+  throw new Error(
+    "The provided event could not be identified as a organization event.",
+  );
 }
 
 export enum OrganizationInstruction {
@@ -210,10 +253,10 @@ export function identifyOrganizationInstruction(
   ) {
     return OrganizationInstruction.UpdateRole;
   }
-  throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_INSTRUCTION, {
-    instructionData: data,
-    programName: "organization",
-  });
+  throw new SolanaError(
+    SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_INSTRUCTION,
+    { instructionData: data, programName: "organization" },
+  );
 }
 
 export type ParsedOrganizationInstruction<
@@ -286,10 +329,13 @@ export function parseOrganizationInstruction<TProgram extends string>(
       };
     }
     default:
-      throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_INSTRUCTION_TYPE, {
-        instructionType: instructionType as string,
-        programName: "organization",
-      });
+      throw new SolanaError(
+        SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_INSTRUCTION_TYPE,
+        {
+          instructionType: instructionType as string,
+          programName: "organization",
+        },
+      );
   }
 }
 
@@ -312,28 +358,35 @@ export type OrganizationPluginAccounts = {
 export type OrganizationPluginInstructions = {
   assertCanSubmit: (
     input: AssertCanSubmitInput,
-  ) => ReturnType<typeof getAssertCanSubmitInstruction> & SelfPlanAndSendFunctions;
+  ) => ReturnType<typeof getAssertCanSubmitInstruction> &
+    SelfPlanAndSendFunctions;
   grantMembership: (
     input: GrantMembershipAsyncInput,
-  ) => ReturnType<typeof getGrantMembershipInstructionAsync> & SelfPlanAndSendFunctions;
+  ) => ReturnType<typeof getGrantMembershipInstructionAsync> &
+    SelfPlanAndSendFunctions;
   initializeOrganization: (
     input: InitializeOrganizationAsyncInput,
-  ) => ReturnType<typeof getInitializeOrganizationInstructionAsync> & SelfPlanAndSendFunctions;
+  ) => ReturnType<typeof getInitializeOrganizationInstructionAsync> &
+    SelfPlanAndSendFunctions;
   revokeMembership: (
     input: RevokeMembershipAsyncInput,
-  ) => ReturnType<typeof getRevokeMembershipInstructionAsync> & SelfPlanAndSendFunctions;
+  ) => ReturnType<typeof getRevokeMembershipInstructionAsync> &
+    SelfPlanAndSendFunctions;
   transferAuthority: (
-    input: TransferAuthorityInput,
-  ) => ReturnType<typeof getTransferAuthorityInstruction> & SelfPlanAndSendFunctions;
+    input: TransferAuthorityAsyncInput,
+  ) => ReturnType<typeof getTransferAuthorityInstructionAsync> &
+    SelfPlanAndSendFunctions;
   updateRole: (
     input: UpdateRoleAsyncInput,
-  ) => ReturnType<typeof getUpdateRoleInstructionAsync> & SelfPlanAndSendFunctions;
+  ) => ReturnType<typeof getUpdateRoleInstructionAsync> &
+    SelfPlanAndSendFunctions;
 };
 
 export type OrganizationPluginPdas = {
   adminMembership: typeof findAdminMembershipPda;
   membership: typeof findMembershipPda;
   organization: typeof findOrganizationPda;
+  newAuthorityMembership: typeof findNewAuthorityMembershipPda;
 };
 
 export type OrganizationPluginRequirements = ClientWithRpc<
@@ -354,22 +407,41 @@ export function organizationProgram() {
         },
         instructions: {
           assertCanSubmit: (input) =>
-            addSelfPlanAndSendFunctions(client, getAssertCanSubmitInstruction(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getAssertCanSubmitInstruction(input),
+            ),
           grantMembership: (input) =>
-            addSelfPlanAndSendFunctions(client, getGrantMembershipInstructionAsync(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getGrantMembershipInstructionAsync(input),
+            ),
           initializeOrganization: (input) =>
-            addSelfPlanAndSendFunctions(client, getInitializeOrganizationInstructionAsync(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getInitializeOrganizationInstructionAsync(input),
+            ),
           revokeMembership: (input) =>
-            addSelfPlanAndSendFunctions(client, getRevokeMembershipInstructionAsync(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getRevokeMembershipInstructionAsync(input),
+            ),
           transferAuthority: (input) =>
-            addSelfPlanAndSendFunctions(client, getTransferAuthorityInstruction(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getTransferAuthorityInstructionAsync(input),
+            ),
           updateRole: (input) =>
-            addSelfPlanAndSendFunctions(client, getUpdateRoleInstructionAsync(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getUpdateRoleInstructionAsync(input),
+            ),
         },
         pdas: {
           adminMembership: findAdminMembershipPda,
           membership: findMembershipPda,
           organization: findOrganizationPda,
+          newAuthorityMembership: findNewAuthorityMembershipPda,
         },
         identifyAccount: identifyOrganizationAccount,
         identifyInstruction: identifyOrganizationInstruction,

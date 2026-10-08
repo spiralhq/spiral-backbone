@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEVNET_GENESIS } from "../common/cluster";
 
 const optionsSchema = z.object({
   golden: z.string().min(1),
@@ -6,6 +7,7 @@ const optionsSchema = z.object({
   databaseUrl: z.string().min(1),
   out: z.string().min(1),
   label: z.string().min(1),
+  expectedGenesis: z.string().min(1).default(DEVNET_GENESIS),
 });
 
 export type H4CliOptions = z.infer<typeof optionsSchema>;

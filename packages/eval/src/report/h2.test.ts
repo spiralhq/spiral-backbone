@@ -1,7 +1,15 @@
 import type { ResultRecord } from "@spiral-backbone/protocol";
 import { describe, expect, it } from "vitest";
-import type { BlockRecord } from "../h2/blocks-log";
-import { h2AcceptanceLine, h2AttemptsLine, percentile, provenanceAudit, summarizeH2 } from "./h2";
+import { validGenerations, type BlockCheckRecord } from "../h2/blocks-log";
+import {
+  h2AcceptanceLine,
+  h2AttemptsLine,
+  h2DirectOnlyLine,
+  h2OneReplicaLine,
+  percentile,
+  provenanceAudit,
+  summarizeH2,
+} from "./h2";
 import type { H2Evidence } from "./load";
 
 const RUN = "2026-10-06T12:00:00Z-h2-r";
@@ -38,7 +46,7 @@ function end(
   confirmed: boolean,
   intended: string[],
   blockIndex = 0,
-): BlockRecord {
+): BlockCheckRecord {
   return {
     run_id: RUN,
     block_index: blockIndex,
@@ -163,7 +171,7 @@ describe("summarizeH2", () => {
       generation: number,
       check: number,
       intended: string[],
-    ): BlockRecord => ({
+    ): BlockCheckRecord => ({
       ...end(block, generation, true, intended),
       phase: "gate",
       check_number: check,
@@ -247,6 +255,15 @@ describe("summarizeH2", () => {
       ["replicas=10", "gateway", "timeout", "1"],
       ["replicas=0", "direct", "timeout", "1"],
     ]);
+  });
+});
+
+describe("validGenerations with retried end checks", () => {
+  it("judges a generation by its last end try only", () => {
+    const tries = (generation: number, ...outcomes: boolean[]) =>
+      outcomes.map((ok, i) => ({ ...end("main", generation, ok, ["a"]), check_number: i + 1 }));
+    const log = [...tries(1, false, false), ...tries(2, false, true), ...tries(3, true, false)];
+    expect(validGenerations(log, RUN)).toEqual(new Set(["main@g2"]));
   });
 });
 
@@ -635,6 +652,85 @@ describe("provenanceAudit", () => {
       provenanceAudit(records, blocks, RUN, [...evidence, ev("main/pd-902/direct/r1", 158, 0)]),
     ).toThrow(
       "evidence for main/pd-902/direct/r1 (generation 1): dag_size is ≤ 0 on a direct success",
+    );
+  });
+});
+
+describe("direct-only and one-replica lines", () => {
+  const plan = planOf(["replicas=3", "degradation", 3], ["replicas=1", "degradation", 1]);
+  const blocks = [
+    end("replicas=3", 1, true, ["a", "b", "c"], 0),
+    end("replicas=1", 1, true, ["a"], 1),
+  ];
+  const times = (n: number, o: Partial<ResultRecord>) => Array.from({ length: n }, () => rec(o));
+  const fail = (o: Partial<ResultRecord>) =>
+    rec({ outcome: "failure", failure_class: "timeout", ...o });
+  const summary = (records: ResultRecord[], b = blocks) => summarizeH2(records, b, RUN, plan);
+
+  it("judges the direct-only criterion apart from gateway attempts", () => {
+    const s = summary([
+      ...times(19, { scenario: "replicas=3@g1" }),
+      rec({ scenario: "replicas=3@g1", outcome: "failure", failure_class: "external_cache" }),
+      ...times(30, { scenario: "replicas=3@g1", method: "gateway" }),
+    ]);
+    expect(h2DirectOnlyLine(s)).toBe(
+      "**Direct-only success with 3 active replicas: 100.00% (19 of 19, excluding 1 external_cache) — criterion ≥ 95%: met**\n",
+    );
+  });
+
+  it("reports NOT met when direct fails although the combined line passes", () => {
+    const s = summary([
+      ...times(9, { scenario: "replicas=3@g1" }),
+      fail({ scenario: "replicas=3@g1" }),
+      ...times(90, { scenario: "replicas=3@g1", method: "gateway" }),
+    ]);
+    expect(h2AcceptanceLine(s)).toContain("criterion ≥ 95%: met");
+    expect(h2DirectOnlyLine(s)).toBe(
+      "**Direct-only success with 3 active replicas: 90.00% (9 of 10, excluding 0 external_cache) — criterion ≥ 95%: NOT met**\n",
+    );
+  });
+
+  it("truncates the percentage like the combined line", () => {
+    const s = summary([
+      ...times(1899, { scenario: "replicas=3@g1" }),
+      ...times(100, { scenario: "replicas=3@g1", outcome: "failure", failure_class: "timeout" }),
+    ]);
+    expect(h2DirectOnlyLine(s)).toContain(": 94.99% (1899 of 1999, ");
+  });
+
+  it("states no data without direct attempts or when all are external_cache", () => {
+    expect(h2DirectOnlyLine(summary([rec({ scenario: "replicas=3@g1", method: "gateway" })]))).toBe(
+      "**Direct-only success with 3 active replicas: no valid attempts — criterion ≥ 95%: no data**\n",
+    );
+    const s = summary([
+      rec({ scenario: "replicas=3@g1", outcome: "failure", failure_class: "external_cache" }),
+    ]);
+    expect(h2DirectOnlyLine(s)).toBe(
+      "**Direct-only success with 3 active replicas: — (0 of 0, excluding 1 external_cache) — criterion ≥ 95%: no data**\n",
+    );
+  });
+
+  it("reports recovery with one active replica as yes, no or no data", () => {
+    const yes = summary([
+      rec({ scenario: "replicas=1@g1" }),
+      fail({ scenario: "replicas=1@g1" }),
+      rec({ scenario: "replicas=1@g1", method: "gateway" }),
+    ]);
+    expect(h2OneReplicaLine(yes)).toBe(
+      "**Direct success with 1 active replica: 1 of 2 (50.00%) — recovery operational: yes**\n",
+    );
+    const no = summary([fail({ scenario: "replicas=1@g1" }), rec({ scenario: "replicas=3@g1" })]);
+    expect(h2OneReplicaLine(no)).toBe(
+      "**Direct success with 1 active replica: 0 of 1 (0.00%) — recovery operational: no**\n",
+    );
+    expect(h2OneReplicaLine(summary([rec({ scenario: "replicas=3@g1" })]))).toBe(
+      "**Direct success with 1 active replica: no valid attempts — recovery operational: no data**\n",
+    );
+    const cache = summary([
+      rec({ scenario: "replicas=1@g1", outcome: "failure", failure_class: "external_cache" }),
+    ]);
+    expect(h2OneReplicaLine(cache)).toBe(
+      "**Direct success with 1 active replica: 0 of 0 (—) — recovery operational: no data**\n",
     );
   });
 });

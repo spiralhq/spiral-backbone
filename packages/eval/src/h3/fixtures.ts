@@ -62,6 +62,8 @@ async function grant(
       organization,
       member,
       role,
+      eventAuthority: await eventAuthority(ORGANIZATION_PROGRAM_ADDRESS),
+      program: ORGANIZATION_PROGRAM_ADDRESS,
     }),
   ]);
   const [membership] = await findMembershipPda({ organization, member });

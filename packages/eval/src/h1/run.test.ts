@@ -21,6 +21,8 @@ vi.mock("@spiral-backbone/protocol", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   bytesToCidString: () => CID,
 }));
+vi.mock("../common/cluster", () => ({ assertExpectedCluster: async () => {} }));
+vi.mock("./kubo-check", () => ({ assertKuboReachable: async () => {} }));
 vi.mock("./retrieve", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   retrieveToFile: async () => 10,
@@ -58,6 +60,7 @@ describe("runH1 stage tracking", () => {
       runH1({
         golden: [work],
         rpcUrl: "http://127.0.0.1:1",
+        expectedGenesis: "g",
         kuboUrl: "http://127.0.0.1:1",
         outPath,
         workDir: dir,
@@ -82,6 +85,7 @@ describe("runH1 stage tracking", () => {
     const summary = await runH1({
       golden: [work],
       rpcUrl: "http://127.0.0.1:1",
+      expectedGenesis: "g",
       kuboUrl: "http://127.0.0.1:1",
       outPath,
       workDir: dir,

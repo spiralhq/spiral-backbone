@@ -29,7 +29,9 @@ export async function findOrganizationPda(
     programAddress,
     seeds: [
       getBytesEncoder().encode(
-        new Uint8Array([111, 114, 103, 97, 110, 105, 122, 97, 116, 105, 111, 110]),
+        new Uint8Array([
+          111, 114, 103, 97, 110, 105, 122, 97, 116, 105, 111, 110,
+        ]),
       ),
       getUtf8Encoder().encode(seeds.slug),
     ],

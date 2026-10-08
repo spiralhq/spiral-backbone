@@ -30,6 +30,9 @@ export function getAccessPolicyDecoder(): FixedSizeDecoder<AccessPolicy> {
   return getEnumDecoder(AccessPolicy);
 }
 
-export function getAccessPolicyCodec(): FixedSizeCodec<AccessPolicyArgs, AccessPolicy> {
+export function getAccessPolicyCodec(): FixedSizeCodec<
+  AccessPolicyArgs,
+  AccessPolicy
+> {
   return combineCodec(getAccessPolicyEncoder(), getAccessPolicyDecoder());
 }

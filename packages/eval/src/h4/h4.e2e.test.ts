@@ -9,6 +9,7 @@ import {
 } from "@spiral-backbone/db/testing/postgres";
 import { resultRecordSchema, type InventoryRecord } from "@spiral-backbone/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { fetchGenesis } from "../common/cluster";
 import { readJsonLines } from "../common/ndjson";
 import { sidecarPath } from "../common/sidecar";
 import { startKuboContainer, type KuboContainer } from "../kubo-node";
@@ -64,6 +65,7 @@ describe.skipIf(skip)("eval:h4 against Surfpool + Postgres", () => {
       golden,
       db,
       rpcUrl: chain.rpcUrl,
+      expectedGenesis: await fetchGenesis(chain.rpcUrl),
       outPath,
       runId: "2026-10-02T12:00:00Z-h4-e2e",
     });
@@ -89,6 +91,7 @@ describe.skipIf(skip)("eval:h4 against Surfpool + Postgres", () => {
       golden: altered,
       db,
       rpcUrl: chain.rpcUrl,
+      expectedGenesis: await fetchGenesis(chain.rpcUrl),
       outPath,
       runId: "2026-10-02T12:00:01Z-h4-e2e",
     });

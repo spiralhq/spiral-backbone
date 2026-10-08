@@ -35,23 +35,24 @@ import {
 } from "@solana/program-client-core";
 import { getFilmCodec, type Film, type FilmArgs } from "../accounts";
 import {
-  getDeactivateReplicaInstruction,
-  getDeclareReplicaInstruction,
+  getDeactivateReplicaInstructionAsync,
+  getDeclareReplicaInstructionAsync,
   getRegisterFilmInstruction,
-  getUpdateAccessPolicyInstruction,
+  getUpdateAccessPolicyInstructionAsync,
   parseDeactivateReplicaInstruction,
   parseDeclareReplicaInstruction,
   parseRegisterFilmInstruction,
   parseUpdateAccessPolicyInstruction,
-  type DeactivateReplicaInput,
-  type DeclareReplicaInput,
+  type DeactivateReplicaAsyncInput,
+  type DeclareReplicaAsyncInput,
   type ParsedDeactivateReplicaInstruction,
   type ParsedDeclareReplicaInstruction,
   type ParsedRegisterFilmInstruction,
   type ParsedUpdateAccessPolicyInstruction,
   type RegisterFilmInput,
-  type UpdateAccessPolicyInput,
+  type UpdateAccessPolicyAsyncInput,
 } from "../instructions";
+import { findMembershipPda } from "../pdas";
 
 export const FILM_PROGRAM_ADDRESS =
   "6MK8C7frTETvrmM5dhN6jkUyXdxcMAfTjKkhG1Y7Pcbu" as Address<"6MK8C7frTETvrmM5dhN6jkUyXdxcMAfTjKkhG1Y7Pcbu">;
@@ -75,20 +76,34 @@ export function identifyFilmAccount(
   ) {
     return FilmAccount.Film;
   }
-  throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_ACCOUNT, {
-    accountData: data,
-    programName: "film",
-  });
+  throw new SolanaError(
+    SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_ACCOUNT,
+    { accountData: data, programName: "film" },
+  );
 }
 
 export enum FilmEvent {
+  AccessPolicyUpdated,
   FilmRegistered,
+  ReplicaDeactivated,
+  ReplicaDeclared,
 }
 
 export function identifyFilmEvent(
   event: { data: ReadonlyUint8Array } | ReadonlyUint8Array,
 ): FilmEvent {
   const data = "data" in event ? event.data : event;
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([88, 120, 89, 67, 94, 252, 93, 29]),
+      ),
+      0,
+    )
+  ) {
+    return FilmEvent.AccessPolicyUpdated;
+  }
   if (
     containsBytes(
       data,
@@ -100,7 +115,31 @@ export function identifyFilmEvent(
   ) {
     return FilmEvent.FilmRegistered;
   }
-  throw new Error("The provided event could not be identified as a film event.");
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([165, 158, 143, 153, 143, 142, 131, 238]),
+      ),
+      0,
+    )
+  ) {
+    return FilmEvent.ReplicaDeactivated;
+  }
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([220, 87, 80, 100, 255, 2, 176, 59]),
+      ),
+      0,
+    )
+  ) {
+    return FilmEvent.ReplicaDeclared;
+  }
+  throw new Error(
+    "The provided event could not be identified as a film event.",
+  );
 }
 
 export enum FilmInstruction {
@@ -158,10 +197,10 @@ export function identifyFilmInstruction(
   ) {
     return FilmInstruction.UpdateAccessPolicy;
   }
-  throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_INSTRUCTION, {
-    instructionData: data,
-    programName: "film",
-  });
+  throw new SolanaError(
+    SOLANA_ERROR__PROGRAM_CLIENTS__FAILED_TO_IDENTIFY_INSTRUCTION,
+    { instructionData: data, programName: "film" },
+  );
 }
 
 export type ParsedFilmInstruction<
@@ -214,16 +253,17 @@ export function parseFilmInstruction<TProgram extends string>(
       };
     }
     default:
-      throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_INSTRUCTION_TYPE, {
-        instructionType: instructionType as string,
-        programName: "film",
-      });
+      throw new SolanaError(
+        SOLANA_ERROR__PROGRAM_CLIENTS__UNRECOGNIZED_INSTRUCTION_TYPE,
+        { instructionType: instructionType as string, programName: "film" },
+      );
   }
 }
 
 export type FilmPlugin = {
   accounts: FilmPluginAccounts;
   instructions: FilmPluginInstructions;
+  pdas: FilmPluginPdas;
   identifyAccount: typeof identifyFilmAccount;
   identifyInstruction: typeof identifyFilmInstruction;
   parseInstruction: typeof parseFilmInstruction;
@@ -235,38 +275,60 @@ export type FilmPluginAccounts = {
 
 export type FilmPluginInstructions = {
   deactivateReplica: (
-    input: DeactivateReplicaInput,
-  ) => ReturnType<typeof getDeactivateReplicaInstruction> & SelfPlanAndSendFunctions;
+    input: DeactivateReplicaAsyncInput,
+  ) => ReturnType<typeof getDeactivateReplicaInstructionAsync> &
+    SelfPlanAndSendFunctions;
   declareReplica: (
-    input: DeclareReplicaInput,
-  ) => ReturnType<typeof getDeclareReplicaInstruction> & SelfPlanAndSendFunctions;
+    input: DeclareReplicaAsyncInput,
+  ) => ReturnType<typeof getDeclareReplicaInstructionAsync> &
+    SelfPlanAndSendFunctions;
   registerFilm: (
     input: RegisterFilmInput,
   ) => ReturnType<typeof getRegisterFilmInstruction> & SelfPlanAndSendFunctions;
   updateAccessPolicy: (
-    input: UpdateAccessPolicyInput,
-  ) => ReturnType<typeof getUpdateAccessPolicyInstruction> & SelfPlanAndSendFunctions;
+    input: UpdateAccessPolicyAsyncInput,
+  ) => ReturnType<typeof getUpdateAccessPolicyInstructionAsync> &
+    SelfPlanAndSendFunctions;
 };
 
-export type FilmPluginRequirements = ClientWithRpc<GetAccountInfoApi & GetMultipleAccountsApi> &
+export type FilmPluginPdas = { membership: typeof findMembershipPda };
+
+export type FilmPluginRequirements = ClientWithRpc<
+  GetAccountInfoApi & GetMultipleAccountsApi
+> &
   ClientWithTransactionPlanning &
   ClientWithTransactionSending;
 
 export function filmProgram() {
-  return <T extends FilmPluginRequirements>(client: T): ExtendedClient<T, { film: FilmPlugin }> => {
+  return <T extends FilmPluginRequirements>(
+    client: T,
+  ): ExtendedClient<T, { film: FilmPlugin }> => {
     return extendClient(client, {
       film: <FilmPlugin>{
         accounts: { film: addSelfFetchFunctions(client, getFilmCodec()) },
         instructions: {
           deactivateReplica: (input) =>
-            addSelfPlanAndSendFunctions(client, getDeactivateReplicaInstruction(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getDeactivateReplicaInstructionAsync(input),
+            ),
           declareReplica: (input) =>
-            addSelfPlanAndSendFunctions(client, getDeclareReplicaInstruction(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getDeclareReplicaInstructionAsync(input),
+            ),
           registerFilm: (input) =>
-            addSelfPlanAndSendFunctions(client, getRegisterFilmInstruction(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getRegisterFilmInstruction(input),
+            ),
           updateAccessPolicy: (input) =>
-            addSelfPlanAndSendFunctions(client, getUpdateAccessPolicyInstruction(input)),
+            addSelfPlanAndSendFunctions(
+              client,
+              getUpdateAccessPolicyInstructionAsync(input),
+            ),
         },
+        pdas: { membership: findMembershipPda },
         identifyAccount: identifyFilmAccount,
         identifyInstruction: identifyFilmInstruction,
         parseInstruction: parseFilmInstruction,

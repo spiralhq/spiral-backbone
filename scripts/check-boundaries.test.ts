@@ -141,3 +141,40 @@ describe("rule exclusions", () => {
     expect(violations[0]).toContain("src/a.ts");
   });
 });
+
+describe("membership-pda-from-organization", () => {
+  const rule = () => boundaryRules.filter((r) => r.name === "membership-pda-from-organization");
+  const write = (path: string, source: string) => {
+    cwd ??= mkdtempSync(join(tmpdir(), "boundaries-"));
+    mkdirSync(join(cwd, path, ".."), { recursive: true });
+    writeFileSync(join(cwd, path), source);
+  };
+
+  it("flags findMembershipPda imported from the film client, under any alias or subpath", () => {
+    write(
+      "packages/cli/src/a.ts",
+      'import { FILM_PROGRAM_ADDRESS, findMembershipPda } from "@spiral-backbone/protocol/generated/film";\n',
+    );
+    write(
+      "packages/eval/src/b.ts",
+      'import {\n  type Film,\n  findMembershipPda as pda,\n} from "@spiral-backbone/protocol/generated/film/pdas";\n',
+    );
+    write(
+      "scripts/c.ts",
+      'export { findMembershipPda } from "@spiral-backbone/protocol/generated/film";\n',
+    );
+    write("packages/protocol/src/d.ts", 'export { findMembershipPda } from "./generated/film";\n');
+    const violations = findViolations(rule(), cwd);
+    expect(violations).toHaveLength(4);
+    expect(violations.every((v) => v.includes('imports "findMembershipPda"'))).toBe(true);
+  });
+
+  it("allows the organization finder and other film-client imports", () => {
+    write(
+      "packages/cli/src/a.ts",
+      'import { findMembershipPda } from "@spiral-backbone/protocol";\nimport { fetchFilm } from "@spiral-backbone/protocol/generated/film";\nimport { findMembershipPda as m } from "@spiral-backbone/protocol/generated/organization";\n',
+    );
+    write("packages/protocol/src/generated/film/index.ts", 'export * from "./pdas";\n');
+    expect(findViolations(rule(), cwd)).toEqual([]);
+  });
+});

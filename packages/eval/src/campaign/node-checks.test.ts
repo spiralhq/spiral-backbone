@@ -11,8 +11,10 @@ import {
   gatewayCheck,
   networkNodeCheck,
   replicaChecks,
+  replicaSudoChecks,
   vitestSummary,
 } from "./node-checks";
+import { SshFault } from "../../../../scripts/kubo-node-control";
 
 const PEERS = [1, 2, 3].map((n) => peerIdFromBytes(peerIdBytes(n), 38));
 const topology = topologyFixture([
@@ -109,6 +111,48 @@ describe("replicaChecks", () => {
       },
     );
     expect(await failure(a!)).toMatch(/SSH to 127\.0\.0\.1:2200 failed/);
+  });
+});
+
+describe("replicaSudoChecks", () => {
+  const START = "/usr/bin/systemctl --no-block start ipfs";
+  const STOP = "/usr/bin/systemctl --no-block stop ipfs";
+
+  it("returns one infra row per replica, named after it", () => {
+    expect(replicaSudoChecks(topology).map((c) => [c.stage, c.name])).toEqual([
+      ["infra", "replica a sudo"],
+      ["infra", "replica b sudo"],
+      ["infra", "replica c sudo"],
+    ]);
+  });
+
+  it("passes when sudo permits both commands, asking with the topology service", async () => {
+    const asked: [string, string][] = [];
+    const [a] = replicaSudoChecks(topology, async (target, service) => {
+      asked.push([`${target.host}:${target.port}`, service]);
+      return [];
+    });
+    await expect(a!.run()).resolves.toBe("NOPASSWD systemctl --no-block start and stop ipfs");
+    expect(asked).toEqual([["127.0.0.1:2200", "ipfs"]]);
+  });
+
+  it("blocks naming the missing rule when one command is refused", async () => {
+    const [, b] = replicaSudoChecks(topology, async () => [START]);
+    expect(await failure(b!)).toBe(`b: sudoers has no NOPASSWD rule for \`${START}\``);
+  });
+
+  it("blocks naming both rules when both are refused", async () => {
+    const [, , c] = replicaSudoChecks(topology, async () => [START, STOP]);
+    expect(await failure(c!)).toBe(
+      `c: sudoers has no NOPASSWD rule for \`${START}\` or \`${STOP}\``,
+    );
+  });
+
+  it("blocks on an SSH fault", async () => {
+    const [a] = replicaSudoChecks(topology, async () => {
+      throw new SshFault("SSH to 127.0.0.1:2200: authentication failed: ");
+    });
+    expect(await failure(a!)).toMatch(/authentication failed/);
   });
 });
 

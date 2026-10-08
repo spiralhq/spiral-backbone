@@ -93,11 +93,7 @@ describe("projectOrganization", () => {
         schemaVersion: 2,
         bump: 255,
       }),
-    ).toThrow(
-      new InvalidAccountError(
-        `organization ${fakeAddress(9)}: schema_version 2 is not supported (expected 1)`,
-      ),
-    );
+    ).toThrow(`organization ${fakeAddress(9)}: schema_version 2 is not supported (expected 1)`);
   });
 });
 
@@ -153,9 +149,7 @@ describe("projectFilm", () => {
 
   it("rejects an unsupported schema_version, naming the address", () => {
     expect(() => projectFilm(fakeAddress(5), film({ schemaVersion: 2 }))).toThrow(
-      new InvalidAccountError(
-        `film ${fakeAddress(5)}: schema_version 2 is not supported (expected 1)`,
-      ),
+      `film ${fakeAddress(5)}: schema_version 2 is not supported (expected 1)`,
     );
   });
 

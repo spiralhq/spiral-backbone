@@ -105,15 +105,38 @@ describe("archiveDay", () => {
   });
 
   it("leaves no partial archive under the final name when a copy fails", async () => {
+    const link = join(root, "plans-link");
+    symlinkSync(plans, link);
     await expect(
       archiveDay({
-        sources: [results, join(root, "missing")],
+        sources: [results, link],
         archiveRoot,
         date: "2026-11-03",
       }),
-    ).rejects.toThrow(/missing/);
+    ).rejects.toThrow(/symlink/i);
     expect(existsSync(join(archiveRoot, "2026-11-03"))).toBe(false);
     expect(readdirSync(archiveRoot)).toEqual([]);
+  });
+
+  it("skips an absent plans/ and reports it", async () => {
+    rmSync(plans, { recursive: true });
+    const { dir, files, skipped } = await archiveDay({
+      sources: [results, plans],
+      archiveRoot,
+      date: "2026-11-03",
+    });
+    expect(files).toBe(3);
+    expect(skipped).toEqual(["plans (absent)"]);
+    expect(await verifyArchive(dir)).toEqual({ ok: true, problems: [] });
+  });
+
+  it("errors when no source directory exists", async () => {
+    rmSync(plans, { recursive: true });
+    rmSync(results, { recursive: true });
+    await expect(
+      archiveDay({ sources: [results, plans], archiveRoot, date: "2026-11-03" }),
+    ).rejects.toThrow(/no source/i);
+    expect(existsSync(join(archiveRoot, "2026-11-03"))).toBe(false);
   });
 
   it("leaves another run's stale temp dir untouched", async () => {
@@ -273,10 +296,22 @@ describe("archive-day CLI", () => {
     expect(result.stderr).not.toContain("    at ");
   });
 
-  it("exits 1 when a source directory is missing", () => {
+  it("skips an absent plans/ with a visible report and exits 0", () => {
     rmSync(plans, { recursive: true });
     const result = run(["--date", "2026-11-03"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("skipped: plans (absent)");
+    expect(JSON.parse(result.stdout.trim().split("\n").at(-1) ?? "")).toEqual({
+      dir: join("archive", "2026-11-03"),
+      files: 3,
+    });
+  });
+
+  it("exits 1 when both sources are absent", () => {
+    rmSync(plans, { recursive: true });
+    rmSync(results, { recursive: true });
+    const result = run(["--date", "2026-11-03"]);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("plans");
+    expect(result.stderr).toMatch(/no source/i);
   });
 });

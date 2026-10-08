@@ -50,7 +50,9 @@ export const ORGANIZATION_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
 ]);
 
 export function getOrganizationDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(ORGANIZATION_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    ORGANIZATION_DISCRIMINATOR,
+  );
 }
 
 export type Organization = {
@@ -119,7 +121,10 @@ export function decodeOrganization<TAddress extends string = string>(
 export function decodeOrganization<TAddress extends string = string>(
   encodedAccount: EncodedAccount<TAddress> | MaybeEncodedAccount<TAddress>,
 ): Account<Organization, TAddress> | MaybeAccount<Organization, TAddress> {
-  return decodeAccount(encodedAccount as MaybeEncodedAccount<TAddress>, getOrganizationDecoder());
+  return decodeAccount(
+    encodedAccount as MaybeEncodedAccount<TAddress>,
+    getOrganizationDecoder(),
+  );
 }
 
 export async function fetchOrganization<TAddress extends string = string>(

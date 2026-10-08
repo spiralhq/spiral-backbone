@@ -1,4 +1,4 @@
-import { redact } from "../h2/command";
+import { redact } from "../common/redact";
 
 export type Stage = "infra" | "h2";
 

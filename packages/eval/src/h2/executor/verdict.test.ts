@@ -190,6 +190,11 @@ describe("provenance parsing", () => {
       ),
     ).toEqual(["12D3KooWA", "12D3KooWB"]);
     expect(
+      parseSwarmPeers(
+        "/ip4/203.0.113.7/tcp/4001/p2p/12D3KooWRelay/p2p-circuit/p2p/12D3KooWTarget\n",
+      ),
+    ).toEqual(["12D3KooWTarget"]);
+    expect(
       parseLedgerBytesReceived(
         "Ledger for 12D3KooWA\nDebt ratio:\t0.000000\nExchanges:\t0\nBytes sent:\t0\nBytes received:\t900208\n",
       ),

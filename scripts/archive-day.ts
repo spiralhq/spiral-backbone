@@ -73,13 +73,22 @@ export async function archiveDay(options: {
   archiveRoot: string;
   date: string;
   now?: Date;
-}): Promise<{ dir: string; files: number }> {
+}): Promise<{ dir: string; files: number; skipped: string[] }> {
   const { sources, archiveRoot, date } = options;
   if (!DATE_PATTERN.test(date)) throw new Error(`invalid date "${date}", expected YYYY-MM-DD`);
-  const names = sources.map((source) => basename(resolve(source)));
+  const named = sources.map((source) => ({ source, name: basename(resolve(source)) }));
+  const names = named.map(({ name }) => name);
   if (new Set(names).size !== names.length) {
     throw new Error(`sources share a basename: ${names.join(", ")}`);
   }
+
+  const present: { source: string; name: string }[] = [];
+  const skipped: string[] = [];
+  for (const entry of named) {
+    if (await lstat(entry.source).catch(() => undefined)) present.push(entry);
+    else skipped.push(`${entry.name} (absent)`);
+  }
+  if (present.length === 0) throw new Error("no source directories exist; nothing to archive");
 
   const finalDir = join(archiveRoot, date);
   if (existsSync(finalDir)) throw new Error(`archive ${finalDir} already exists`);
@@ -87,13 +96,12 @@ export async function archiveDay(options: {
   await mkdir(archiveRoot, { recursive: true });
   const tmpDir = await mkdtemp(join(archiveRoot, `.${date}.tmp-`));
   try {
-    for (const [index, source] of sources.entries()) {
-      const stat = await lstat(source).catch(() => undefined);
-      if (!stat) throw new Error(`source directory ${source} does not exist`);
+    for (const { source, name } of present) {
+      const stat = await lstat(source);
       if (stat.isSymbolicLink()) throw new Error(`symlink not allowed: ${source}`);
       if (!stat.isDirectory()) throw new Error(`source ${source} is not a directory`);
       for (const file of await listFiles(source, rejectOdd)) {
-        const target = join(tmpDir, names[index] ?? "", relative(source, file));
+        const target = join(tmpDir, name, relative(source, file));
         await mkdir(join(target, ".."), { recursive: true });
         await copyFile(file, target);
       }
@@ -108,7 +116,7 @@ export async function archiveDay(options: {
     };
     await writeFile(join(tmpDir, MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
     await rename(tmpDir, finalDir);
-    return { dir: finalDir, files: files.length };
+    return { dir: finalDir, files: files.length, skipped };
   } catch (error) {
     await rm(tmpDir, { recursive: true, force: true });
     throw error;
@@ -242,7 +250,8 @@ async function main(argv: string[]): Promise<number> {
       archiveRoot: values.archive,
       date: values.date ?? new Date().toISOString().slice(0, 10),
     });
-    console.log(JSON.stringify(result));
+    for (const entry of result.skipped) console.log(`skipped: ${entry}`);
+    console.log(JSON.stringify({ dir: result.dir, files: result.files }));
     return 0;
   } catch (error) {
     console.error((error as Error).message);

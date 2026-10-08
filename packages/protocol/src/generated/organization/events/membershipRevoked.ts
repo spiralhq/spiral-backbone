@@ -28,12 +28,13 @@ import {
   type ReadonlyUint8Array,
 } from "@solana/kit";
 
-export const MEMBERSHIP_REVOKED_EVENT_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  191, 117, 121, 162, 171, 173, 117, 75,
-]);
+export const MEMBERSHIP_REVOKED_EVENT_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([191, 117, 121, 162, 171, 173, 117, 75]);
 
 export function getMembershipRevokedEventDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(MEMBERSHIP_REVOKED_EVENT_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    MEMBERSHIP_REVOKED_EVENT_DISCRIMINATOR,
+  );
 }
 
 export type MembershipRevokedEvent = {
@@ -77,7 +78,10 @@ export function getMembershipRevokedEventCodec(): FixedSizeCodec<
   MembershipRevokedEventArgs,
   MembershipRevokedEvent
 > {
-  return combineCodec(getMembershipRevokedEventEncoder(), getMembershipRevokedEventDecoder());
+  return combineCodec(
+    getMembershipRevokedEventEncoder(),
+    getMembershipRevokedEventDecoder(),
+  );
 }
 
 /** Parses the provided bytes into {@link MembershipRevokedEvent} event data. */

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { z } from "zod";
+import { DEVNET_GENESIS } from "../common/cluster";
 import { makeRunId } from "../common/run-id";
 import { createH3Client } from "./client";
 import { runH3 } from "./run";
@@ -9,6 +10,7 @@ const optionsSchema = z.object({
   wsUrl: z.url({ protocol: /^wss?$/ }).optional(),
   keypair: z.string().min(1),
   out: z.string().min(1),
+  expectedGenesis: z.string().min(1),
   label: z.string().regex(/^[a-z0-9-]{1,25}$/),
 });
 
@@ -24,6 +26,7 @@ export const h3Command = new Command("h3")
     "funded keypair that owns the fixtures",
     `${process.env["HOME"]}/.config/solana/id.json`,
   )
+  .option("--expected-genesis <hash>", "expected cluster genesis hash", DEVNET_GENESIS)
   .option("--out <path>", "results NDJSON", "results/h3.ndjson")
   .option("--label <label>", "run label, also used in fixture slugs", Date.now().toString(36))
   .action(async (flags: Record<string, string | undefined>) => {
@@ -45,6 +48,7 @@ export const h3Command = new Command("h3")
       const summary = await runH3({
         client,
         rpcUrl: options.rpcUrl,
+        expectedGenesis: options.expectedGenesis,
         outPath: options.out,
         runId,
         label: options.label,

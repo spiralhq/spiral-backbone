@@ -13,6 +13,8 @@ import {
   filmsMatchCheck,
   goldenMatchesManifestCheck,
   manifestFinalCheck,
+  planMatchesGoldenCheck,
+  replicaPinsChecks,
 } from "./h2-checks";
 import {
   conformanceCheck,
@@ -20,6 +22,7 @@ import {
   gatewayCheck,
   networkNodeCheck,
   replicaChecks,
+  replicaSudoChecks,
 } from "./node-checks";
 
 export type PreflightStage = Stage | "all";
@@ -30,6 +33,7 @@ export interface PreflightInputs {
   manifestPath: string;
   filesDir: string;
   goldenPath?: string;
+  planPath?: string;
   campaignPath: string;
   expectedGenesis: string;
   minLamports: bigint;
@@ -59,6 +63,7 @@ function infraChecks(inputs: PreflightInputs, rpc: ChainRpc): Check[] {
     manifestFinalCheck(inputs.manifestPath, inputs.filesDir),
     inputs.skipConformance ? skippedConformance : conformanceCheck(),
     ...replicaChecks(topology, { pingTimeoutMs: inputs.pingTimeoutMs }),
+    ...replicaSudoChecks(topology),
     networkNodeCheck(topology, inputs.pingTimeoutMs),
     gatewayCheck(topology.gateway_url, inputs.pingTimeoutMs),
     executorImageCheck(topology.executor.image),
@@ -69,7 +74,9 @@ function h2Checks(inputs: PreflightInputs, rpc: ChainRpc, goldenPath: string): C
   return [
     goldenMatchesManifestCheck(goldenPath, inputs.manifestPath),
     filmsMatchCheck(rpc, goldenPath, inputs.topology),
+    ...replicaPinsChecks(inputs.topology, goldenPath),
     campaignFeasibleCheck(inputs.campaignPath, goldenPath, inputs.topology),
+    ...(inputs.planPath ? [planMatchesGoldenCheck(inputs.planPath, goldenPath)] : []),
   ];
 }
 

@@ -56,7 +56,9 @@ export const REGISTER_FILM_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
 ]);
 
 export function getRegisterFilmDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(REGISTER_FILM_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    REGISTER_FILM_DISCRIMINATOR,
+  );
 }
 
 export type RegisterFilmInstruction<
@@ -67,7 +69,8 @@ export type RegisterFilmInstruction<
   TAccountFilm extends string | AccountMeta<string> = string,
   TAccountOrganizationProgram extends string | AccountMeta<string> =
     "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw",
-  TAccountSystemProgram extends string | AccountMeta<string> = "11111111111111111111111111111111",
+  TAccountSystemProgram extends string | AccountMeta<string> =
+    "11111111111111111111111111111111",
   TAccountEventAuthority extends string | AccountMeta<string> = string,
   TAccountProgram extends string | AccountMeta<string> = string,
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
@@ -76,13 +79,18 @@ export type RegisterFilmInstruction<
   InstructionWithAccounts<
     [
       TAccountSubmitter extends string
-        ? WritableSignerAccount<TAccountSubmitter> & AccountSignerMeta<TAccountSubmitter>
+        ? WritableSignerAccount<TAccountSubmitter> &
+            AccountSignerMeta<TAccountSubmitter>
         : TAccountSubmitter,
       TAccountOrganization extends string
-        ? WritableAccount<TAccountOrganization>
+        ? ReadonlyAccount<TAccountOrganization>
         : TAccountOrganization,
-      TAccountMembership extends string ? ReadonlyAccount<TAccountMembership> : TAccountMembership,
-      TAccountFilm extends string ? WritableAccount<TAccountFilm> : TAccountFilm,
+      TAccountMembership extends string
+        ? ReadonlyAccount<TAccountMembership>
+        : TAccountMembership,
+      TAccountFilm extends string
+        ? WritableAccount<TAccountFilm>
+        : TAccountFilm,
       TAccountOrganizationProgram extends string
         ? ReadonlyAccount<TAccountOrganizationProgram>
         : TAccountOrganizationProgram,
@@ -92,7 +100,9 @@ export type RegisterFilmInstruction<
       TAccountEventAuthority extends string
         ? ReadonlyAccount<TAccountEventAuthority>
         : TAccountEventAuthority,
-      TAccountProgram extends string ? ReadonlyAccount<TAccountProgram> : TAccountProgram,
+      TAccountProgram extends string
+        ? ReadonlyAccount<TAccountProgram>
+        : TAccountProgram,
       ...TRemainingAccounts,
     ]
   >;
@@ -151,12 +161,16 @@ export function getRegisterFilmInstructionDataCodec(): Codec<
 
 export type RegisterFilmInput<
   TAccountSubmitter extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
   TAccountFilm extends InstructionAccountInput = InstructionAccountInput,
-  TAccountOrganizationProgram extends InstructionAccountInput = InstructionAccountInput,
-  TAccountSystemProgram extends InstructionAccountInput = InstructionAccountInput,
-  TAccountEventAuthority extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganizationProgram extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountSystemProgram extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
 > = {
   submitter: TAccountSubmitter;
@@ -210,7 +224,10 @@ export function getRegisterFilmInstruction<
     TAccountMembership,
     InstructionAccountInputAddress<TAccountMembership>
   >,
-  ResolvedInstructionAccountMeta<TAccountFilm, InstructionAccountInputAddress<TAccountFilm>>,
+  ResolvedInstructionAccountMeta<
+    TAccountFilm,
+    InstructionAccountInputAddress<TAccountFilm>
+  >,
   ResolvedInstructionAccountMeta<
     TAccountOrganizationProgram,
     InstructionAccountInputAddress<TAccountOrganizationProgram>
@@ -223,7 +240,10 @@ export function getRegisterFilmInstruction<
     TAccountEventAuthority,
     InstructionAccountInputAddress<TAccountEventAuthority>
   >,
-  ResolvedInstructionAccountMeta<TAccountProgram, InstructionAccountInputAddress<TAccountProgram>>
+  ResolvedInstructionAccountMeta<
+    TAccountProgram,
+    InstructionAccountInputAddress<TAccountProgram>
+  >
 > {
   // Program address.
   const programAddress = config?.programAddress ?? FILM_PROGRAM_ADDRESS;
@@ -241,7 +261,7 @@ export function getRegisterFilmInstruction<
     organization: {
       value: input.organization ?? null,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     membership: {
       value: input.membership ?? null,
@@ -299,7 +319,9 @@ export function getRegisterFilmInstruction<
       getAccountMeta("eventAuthority", accounts.eventAuthority),
       getAccountMeta("program", accounts.program),
     ],
-    data: getRegisterFilmInstructionDataEncoder().encode(args as RegisterFilmInstructionDataArgs),
+    data: getRegisterFilmInstructionDataEncoder().encode(
+      args as RegisterFilmInstructionDataArgs,
+    ),
     programAddress,
   } as RegisterFilmInstruction<
     TProgramAddress,
@@ -315,7 +337,10 @@ export function getRegisterFilmInstruction<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountFilm, InstructionAccountInputAddress<TAccountFilm>>,
+    ResolvedInstructionAccountMeta<
+      TAccountFilm,
+      InstructionAccountInputAddress<TAccountFilm>
+    >,
     ResolvedInstructionAccountMeta<
       TAccountOrganizationProgram,
       InstructionAccountInputAddress<TAccountOrganizationProgram>
@@ -328,7 +353,10 @@ export function getRegisterFilmInstruction<
       TAccountEventAuthority,
       InstructionAccountInputAddress<TAccountEventAuthority>
     >,
-    ResolvedInstructionAccountMeta<TAccountProgram, InstructionAccountInputAddress<TAccountProgram>>
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
   >);
 }
 
@@ -359,10 +387,13 @@ export function parseRegisterFilmInstruction<
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedRegisterFilmInstruction<TProgram, TAccountMetas> {
   if (instruction.accounts.length < 8) {
-    throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS, {
-      actualAccountMetas: instruction.accounts.length,
-      expectedAccountMetas: 8,
-    });
+    throw new SolanaError(
+      SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
+      {
+        actualAccountMetas: instruction.accounts.length,
+        expectedAccountMetas: 8,
+      },
+    );
   }
   let accountIndex = 0;
   const getNextAccount = () => {

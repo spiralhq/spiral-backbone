@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { secretsOfUrls } from "../h2/command";
+import { secretsOfUrls } from "../common/redact";
 import { renderChecks, runChecks, type Check } from "./checks";
 
 const ok = (name: string): Check => ({ stage: "infra", name, run: async () => "fine" });

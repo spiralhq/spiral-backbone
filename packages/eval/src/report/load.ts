@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resultRecordSchema, type ResultRecord } from "@spiral-backbone/protocol";
 import { z } from "zod";
-import { readJsonLines } from "../common/ndjson";
+import { readJsonLines, RESUME_H2, type TailHint } from "../common/ndjson";
 import { runStatusSchema, type RunStatus } from "../common/run-status";
 
 export const h3EvidenceSchema = z
@@ -58,8 +58,8 @@ export const h4RunSchema = z
   })
   .passthrough();
 
-export async function loadResults(path: string): Promise<ResultRecord[]> {
-  return existsSync(path) ? readJsonLines(path, resultRecordSchema) : [];
+export async function loadResults(path: string, hint?: TailHint): Promise<ResultRecord[]> {
+  return existsSync(path) ? readJsonLines(path, resultRecordSchema, hint) : [];
 }
 
 export async function loadH3Evidence(path: string): Promise<z.infer<typeof h3EvidenceSchema>[]> {
@@ -67,7 +67,7 @@ export async function loadH3Evidence(path: string): Promise<z.infer<typeof h3Evi
 }
 
 export async function loadH2Evidence(path: string): Promise<H2Evidence[]> {
-  return existsSync(path) ? readJsonLines(path, h2EvidenceSchema) : [];
+  return existsSync(path) ? readJsonLines(path, h2EvidenceSchema, RESUME_H2) : [];
 }
 
 export function loadH4Run(path: string): z.infer<typeof h4RunSchema> | undefined {

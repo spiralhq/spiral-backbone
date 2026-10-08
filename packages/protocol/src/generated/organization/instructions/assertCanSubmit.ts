@@ -40,12 +40,13 @@ import {
 } from "@solana/program-client-core";
 import { ORGANIZATION_PROGRAM_ADDRESS } from "../programs";
 
-export const ASSERT_CAN_SUBMIT_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  207, 49, 188, 56, 51, 250, 238, 229,
-]);
+export const ASSERT_CAN_SUBMIT_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([207, 49, 188, 56, 51, 250, 238, 229]);
 
 export function getAssertCanSubmitDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(ASSERT_CAN_SUBMIT_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    ASSERT_CAN_SUBMIT_DISCRIMINATOR,
+  );
 }
 
 export type AssertCanSubmitInstruction<
@@ -61,9 +62,12 @@ export type AssertCanSubmitInstruction<
       TAccountOrganization extends string
         ? ReadonlyAccount<TAccountOrganization>
         : TAccountOrganization,
-      TAccountMembership extends string ? ReadonlyAccount<TAccountMembership> : TAccountMembership,
+      TAccountMembership extends string
+        ? ReadonlyAccount<TAccountMembership>
+        : TAccountMembership,
       TAccountMember extends string
-        ? ReadonlySignerAccount<TAccountMember> & AccountSignerMeta<TAccountMember>
+        ? ReadonlySignerAccount<TAccountMember> &
+            AccountSignerMeta<TAccountMember>
         : TAccountMember,
       ...TRemainingAccounts,
     ]
@@ -83,7 +87,9 @@ export function getAssertCanSubmitInstructionDataEncoder(): FixedSizeEncoder<Ass
 }
 
 export function getAssertCanSubmitInstructionDataDecoder(): FixedSizeDecoder<AssertCanSubmitInstructionData> {
-  return getStructDecoder([["discriminator", fixDecoderSize(getBytesDecoder(), 8)]]);
+  return getStructDecoder([
+    ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
+  ]);
 }
 
 export function getAssertCanSubmitInstructionDataCodec(): FixedSizeCodec<
@@ -97,7 +103,8 @@ export function getAssertCanSubmitInstructionDataCodec(): FixedSizeCodec<
 }
 
 export type AssertCanSubmitInput<
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
   TAccountMember extends InstructionSignerInput = InstructionSignerInput,
 > = {
@@ -112,7 +119,11 @@ export function getAssertCanSubmitInstruction<
   TAccountMember extends InstructionSignerInput,
   TProgramAddress extends Address = typeof ORGANIZATION_PROGRAM_ADDRESS,
 >(
-  input: AssertCanSubmitInput<TAccountOrganization, TAccountMembership, TAccountMember>,
+  input: AssertCanSubmitInput<
+    TAccountOrganization,
+    TAccountMembership,
+    TAccountMember
+  >,
   config?: { programAddress?: TProgramAddress },
 ): AssertCanSubmitInstruction<
   TProgramAddress,
@@ -124,7 +135,10 @@ export function getAssertCanSubmitInstruction<
     TAccountMembership,
     InstructionAccountInputAddress<TAccountMembership>
   >,
-  ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>
+  ResolvedInstructionAccountMeta<
+    TAccountMember,
+    InstructionAccountInputAddress<TAccountMember>
+  >
 > {
   // Program address.
   const programAddress = config?.programAddress ?? ORGANIZATION_PROGRAM_ADDRESS;
@@ -169,7 +183,10 @@ export function getAssertCanSubmitInstruction<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>
+    ResolvedInstructionAccountMeta<
+      TAccountMember,
+      InstructionAccountInputAddress<TAccountMember>
+    >
   >);
 }
 
@@ -195,10 +212,13 @@ export function parseAssertCanSubmitInstruction<
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedAssertCanSubmitInstruction<TProgram, TAccountMetas> {
   if (instruction.accounts.length < 3) {
-    throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS, {
-      actualAccountMetas: instruction.accounts.length,
-      expectedAccountMetas: 3,
-    });
+    throw new SolanaError(
+      SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
+      {
+        actualAccountMetas: instruction.accounts.length,
+        expectedAccountMetas: 3,
+      },
+    );
   }
   let accountIndex = 0;
   const getNextAccount = () => {

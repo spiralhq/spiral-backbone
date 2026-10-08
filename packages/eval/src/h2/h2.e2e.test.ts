@@ -13,7 +13,7 @@ import { provenanceAudit, summarizeH2 } from "../report/h2";
 import { loadH2Evidence } from "../report/load";
 import { shouldSkipE2e, startLocalChain, type LocalChain } from "../testing/chain";
 import { createOrg, submitForTest } from "../testing/submit";
-import { blocksPath, readBlockRecords } from "./blocks-log";
+import { blocksPath, isCheck, readBlockRecords } from "./blocks-log";
 import { loadCampaign, type CampaignSpec } from "./campaign";
 import { expectedDeclaredOf, payloadContextOf, realDeps } from "./deps";
 import { buildExecutorImage } from "./executor/image";
@@ -118,7 +118,7 @@ describe.skipIf(skip)("eval:h2 reduced-scale dry run", () => {
     });
     expect(result).toMatchObject({ executed: 14, interrupted: false, generationsRerun: 0 });
 
-    const log = await readBlockRecords(blocksPath(outPath));
+    const log = (await readBlockRecords(blocksPath(outPath))).filter(isCheck);
     const order = ["main", "cold-start", "replicas=3", "replicas=2", "replicas=1", "replicas=0"];
     expect(log.every((r) => r.run_id === plan.run_id)).toBe(true);
     expect(log.filter((r) => r.phase === "gate" && r.confirmed).map((r) => r.block_name)).toEqual(
@@ -283,7 +283,7 @@ describe.skipIf(skip)("eval:h2 reduced-scale dry run", () => {
     expect(keys).toHaveLength(4);
     expect(new Set(keys).size).toBe(4);
 
-    const log = await readBlockRecords(blocksPath(outPath));
+    const log = (await readBlockRecords(blocksPath(outPath))).filter(isCheck);
     expect(log.every((r) => r.generation === 1)).toBe(true);
     const gates = log.filter((r) => r.phase === "gate");
     expect(gates.map((r) => r.check_number)).toEqual(gates.map((_, i) => i + 1));
@@ -330,7 +330,7 @@ describe.skipIf(skip)("eval:h2 reduced-scale dry run", () => {
       expectedDeclared: expectedDeclaredOf(local.topology),
     });
     expect(result.generationsRerun).toBe(1);
-    const blocks = await readBlockRecords(blocksPath(outPath));
+    const blocks = (await readBlockRecords(blocksPath(outPath))).filter(isCheck);
     const ends = blocks.filter((r) => r.phase === "end");
     expect(ends.map((e) => [e.generation, e.confirmed])).toEqual([
       [1, false],

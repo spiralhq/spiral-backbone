@@ -18,13 +18,16 @@ or Debian image on each. The campaign also rents a 4th server (the orchestrator,
 Hetzner); see the [campaign runbook](campaign-runbook.md) for the full sequence and the
 cost table.
 
+The campaign runbook fixes which provider hosts replica `a`, `b` and `c` (`a` must not share a
+provider with the orchestrator): follow its ordering, [campaign runbook §0](campaign-runbook.md#0-overview-cost-and-the-end-to-end-gate).
+
 **A powered-off server is still billed. Only deleting it stops the cost.**
 
 Create each server with your workstation's SSH public key for `root` (all three providers
 offer this at creation). **Administrative steps run as `root`** (`ssh root@<node-host>`), so the
 `spiral` operator account never needs general sudo: its only sudo right is the narrow
-`systemctl start/stop ipfs` rule of §6. Install the packages these steps use (Debian images
-ship without `sudo` and `ufw`):
+`systemctl --no-block start/stop ipfs` rule of §6. Install the packages these steps use (Debian
+images ship without `sudo` and `ufw`):
 
 ```bash
 # as root on the node
@@ -137,16 +140,20 @@ chown spiral:spiral /home/spiral/.ssh/authorized_keys
 chmod 600 /home/spiral/.ssh/authorized_keys
 ```
 
-`startService`/`shutdownService` run `sudo systemctl start ipfs` / `sudo systemctl stop
-ipfs` over this connection, so `spiral` needs passwordless sudo for exactly those two
-invocations — nothing broader. Add a sudoers entry restricted to the literal commands:
+`startService`/`shutdownService` run `sudo systemctl --no-block start ipfs` /
+`sudo systemctl --no-block stop ipfs` over this connection, so `spiral` needs passwordless
+sudo for exactly those two invocations — nothing broader. Add a sudoers entry restricted to the literal commands:
 
 ```bash
 # as root on the node
-echo 'spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl start ipfs, /usr/bin/systemctl stop ipfs' > /etc/sudoers.d/spiral
+echo 'spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl --no-block start ipfs, /usr/bin/systemctl --no-block stop ipfs' > /etc/sudoers.d/spiral
 chmod 440 /etc/sudoers.d/spiral
 visudo -cf /etc/sudoers.d/spiral
 ```
+
+The campaign pre-flight checks this rule on each replica with
+`sudo -n -l /usr/bin/systemctl --no-block start ipfs` and the same for `stop`; its
+`replica <name> sudo` row blocks if either is not permitted.
 
 Do **not** grant a bare `/usr/bin/systemctl` (with no arguments) — that's unrestricted
 root, since systemctl can also do things like `link` an arbitrary unit file. Also don't

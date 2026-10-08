@@ -1,7 +1,8 @@
 import { createClient, type Address } from "@solana/kit";
 import { signerFromFile } from "@solana/kit-plugin-signer";
 import { Command } from "commander";
-import { redact, secretsOf } from "../h2/command";
+import { redact } from "../common/redact";
+import { secretsOf } from "../h2/command";
 import { loadTopology } from "../h2/topology";
 import { DEVNET_GENESIS } from "./chain-checks";
 import { renderChecks, runChecks } from "./checks";
@@ -37,7 +38,7 @@ async function payerOf(keypairPath: string): Promise<Address> {
     const { payer } = await createClient().use(signerFromFile(keypairPath));
     return payer.address;
   } catch {
-    throw new Error(`keypair ${keypairPath} is unreadable or not a valid keypair`);
+    throw new Error("keypair is unreadable or invalid");
   }
 }
 
@@ -48,6 +49,7 @@ interface PreflightFlags {
   manifest: string;
   filesDir: string;
   golden?: string;
+  plan?: string;
   campaign: string;
   expectedGenesis: string;
   minBalanceSol: string;
@@ -69,6 +71,7 @@ campaignCommand
   .option("--manifest <path>", "dataset manifest", "dataset/manifest.json")
   .option("--files-dir <dir>", "downloaded dataset files", "dataset/files")
   .option("--golden <path>", "golden inventory (required for h2 and all)")
+  .option("--plan <path>", "frozen plan; with it, h2 also checks the plan froze this golden")
   .option("--campaign <path>", "campaign spec", "packages/eval/campaigns/h2-final.json")
   .option("--expected-genesis <hash>", "expected cluster genesis hash", DEVNET_GENESIS)
   .option("--min-balance-sol <n>", "minimum payer balance in SOL", "2")
@@ -101,6 +104,7 @@ campaignCommand
         manifestPath: flags.manifest,
         filesDir: flags.filesDir,
         goldenPath: flags.golden,
+        planPath: flags.plan,
         campaignPath: flags.campaign,
         expectedGenesis: flags.expectedGenesis,
         minLamports,

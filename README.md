@@ -28,7 +28,8 @@ spiral-backbone/
 │       └── verifier/    # Isolated CID re-computation, evidence for hypothesis H1
 ├── infra/
 │   └── kubo/            # Kubo node setup script + systemd unit
-├── scripts/             # Repo-level scripts (import-boundary checker, Kubo node control agent)
+├── scripts/             # Repo-level scripts (import-boundary checker, manifest validator, Kubo node
+│                        #   control agent, daily campaign archive) and their tests
 └── dataset/             # Evaluation dataset (curated works used by the evaluation harness)
 ```
 
@@ -124,8 +125,20 @@ Docker containers.
 - `npm run test` — runs `turbo run test` across all packages.
 - `npm run check:boundaries` — runs the import-boundary checker directly.
 - `npm run test:scripts` — runs the vitest suite for `scripts/`.
+- `npm run spiral` — the protocol CLI (`org create`, `submit`, `fetch`, `verify`).
+- `npm run indexer` — the indexer CLI.
+- `npm run validate:manifest` — validate `dataset/manifest.json` (`-- --final` for the campaign).
+- `npm run eval:h1` / `eval:h2` / `eval:h3` / `eval:h4` / `eval:report` — the evaluation harness
+  (`npm run eval` runs the bare CLI).
+- `npm run campaign:preflight` — the campaign's fail-closed pre-flight.
+- `npm run campaign:archive-day` — snapshot (or `--verify`) `results/` and `plans/`.
+
+Tests that need the sibling `spiral-programs` build, Surfpool, `solana-keygen` and Docker skip
+themselves when a prerequisite is missing; `SPIRAL_E2E=required` turns the skip into a failure.
 
 ## Continuous Integration
 
 `.github/workflows/ci.yml` runs on every push and pull request: install, build,
-`check-types`, `check:ci`, and `test`.
+`check-types`, `check:ci`, and `test`. The end-to-end suites skip there, because `spiral-programs`
+is private and not checked out; run `SPIRAL_E2E=required npm run test` on a workstation that has
+the programs built before relying on them (campaign runbook §0).

@@ -25,7 +25,7 @@ export interface BitswapStat {
 export function parseSwarmPeers(output: string): string[] {
   return output
     .split("\n")
-    .map((line) => /\/p2p\/(\S+)$/.exec(line.trim())?.[1])
+    .map((line) => /\/p2p\/([^/\s]+)$/.exec(line.trim())?.[1])
     .filter((id): id is string => Boolean(id));
 }
 

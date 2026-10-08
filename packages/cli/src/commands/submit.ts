@@ -1,5 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { getProgramDerivedAddress } from "@solana/kit";
+import {
+  getProgramDerivedAddress,
+  type Address,
+  type GetAccountInfoApi,
+  type Instruction,
+  type Rpc,
+} from "@solana/kit";
 import {
   assertNodesAgree,
   cidStringToBytes,
@@ -14,7 +20,9 @@ import {
 import {
   FILM_PROGRAM_ADDRESS,
   fetchFilm,
+  fetchMaybeFilm,
   getDeclareReplicaInstruction,
+  type Film,
   getRegisterFilmInstruction,
 } from "@spiral-backbone/protocol/generated/film";
 import {
@@ -27,16 +35,27 @@ import { Command } from "commander";
 import { z } from "zod";
 import { createSpiralClient, resolveRpcUrl } from "../lib/client";
 import { CliError, handleCliError } from "../lib/errors";
+import {
+  activeReplicaPeers,
+  peerHex,
+  resolveFilmSignatures,
+  type FilmHistoryRpc,
+  type FilmSignatures,
+} from "../lib/film-signatures";
 import { assertContentMatchesWork, findManifestWork } from "../lib/manifest";
 
 const MAX_REPLICAS = 8;
+const CHUNKING_PROFILE = 1;
 
 export const submitOptionsSchema = z.object({
   org: z.string().min(1),
   workId: z.string().min(1),
   manifest: z.string().min(1),
   file: z.string().min(1),
-  title: z.string().min(1).max(160),
+  title: z
+    .string()
+    .min(1)
+    .refine((title) => Buffer.byteLength(title, "utf8") <= 160, "title must be at most 160 bytes"),
   replicas: z.string().min(1),
   cluster: z.enum(["devnet", "local"]),
   keypair: z.string().min(1),
@@ -76,6 +95,93 @@ export function assertDistinctPeers(urls: string[], peers: { peerId: string }[])
   }
 }
 
+export interface FilmChain {
+  rpc: Rpc<GetAccountInfoApi> & FilmHistoryRpc;
+  send(instruction: Instruction): Promise<unknown>;
+}
+
+export interface FilmSubmission {
+  filmPda: Address;
+  cid: Uint8Array;
+  cidLen: number;
+  byteSize: bigint;
+  chunkingProfile: number;
+  title: string;
+  peers: { peerId: string; bytes: Uint8Array }[];
+  registerInstruction: () => Instruction;
+  declareInstruction: (peerId: Uint8Array) => Instruction;
+  log?: (line: string) => void;
+  history?: { attempts?: number; delayMs?: number };
+}
+
+function assertSameFilm(existing: Film, submission: FilmSubmission): void {
+  const where = `Film ${submission.filmPda} already exists`;
+  const sameCid =
+    existing.cidLen === submission.cidLen &&
+    Buffer.from(existing.cid.slice(0, existing.cidLen)).equals(
+      Buffer.from(submission.cid.subarray(0, submission.cidLen)),
+    );
+  if (!sameCid) throw new CliError(`${where} with a different CID; refusing to touch it.`);
+  if (existing.byteSize !== submission.byteSize) {
+    throw new CliError(
+      `${where} with byte_size ${existing.byteSize}, not ${submission.byteSize}; refusing to touch it.`,
+    );
+  }
+  if (existing.chunkingProfile !== submission.chunkingProfile) {
+    throw new CliError(
+      `${where} with chunking_profile ${existing.chunkingProfile}, not ${submission.chunkingProfile}; refusing to touch it.`,
+    );
+  }
+  if (existing.title !== submission.title) {
+    throw new CliError(
+      `${where} with title "${existing.title}"; rerun with that --title to resume it.`,
+    );
+  }
+}
+
+/** Idempotent per Film: registers it unless it exists, then declares only the inactive PeerIDs. */
+export async function ensureFilmOnChain(
+  chain: FilmChain,
+  submission: FilmSubmission,
+): Promise<{ film: Film } & FilmSignatures> {
+  const log = submission.log ?? (() => {});
+  const existing = await fetchMaybeFilm(chain.rpc, submission.filmPda);
+  let active = new Set<string>();
+  if (existing.exists) {
+    assertSameFilm(existing.data, submission);
+    active = new Set(activeReplicaPeers(existing.data));
+    log(`Film ${submission.filmPda} already registered; resuming.`);
+  } else {
+    await chain.send(submission.registerInstruction());
+  }
+
+  for (const peer of submission.peers) {
+    if (active.has(peerHex(peer.bytes, peer.bytes.length))) {
+      log(`Replica ${peer.peerId} already active; skipping.`);
+      continue;
+    }
+    await chain.send(submission.declareInstruction(peer.bytes));
+  }
+
+  const film = (await fetchFilm(chain.rpc, submission.filmPda)).data;
+  const nowActive = new Set(activeReplicaPeers(film));
+  const inactive = submission.peers.filter(
+    (peer) => !nowActive.has(peerHex(peer.bytes, peer.bytes.length)),
+  );
+  if (inactive.length > 0) {
+    throw new CliError(
+      `Film ${submission.filmPda} does not list ${inactive.map((p) => p.peerId).join(", ")} as active after declaring.`,
+    );
+  }
+  const signatures = await resolveFilmSignatures(
+    chain.rpc,
+    submission.filmPda,
+    film,
+    submission.history,
+  );
+  return { film, ...signatures };
+}
+
 export const submit = new Command()
   .name("submit")
   .description(
@@ -85,7 +191,7 @@ export const submit = new Command()
   .requiredOption("--work-id <id>", "manifest work_id this file is, e.g. pd-001")
   .option("--manifest <path>", "dataset manifest", "dataset/manifest.json")
   .requiredOption("--file <path>", "path to the file to submit")
-  .requiredOption("--title <title>", "film title (max 160 chars)")
+  .requiredOption("--title <title>", "film title (max 160 UTF-8 bytes)")
   .requiredOption(
     "--replicas <urls>",
     "comma-separated Kubo RPC URLs, e.g. http://node-a:5001,http://node-b:5001",
@@ -154,53 +260,65 @@ export const submit = new Command()
         seeds: [new TextEncoder().encode("__event_authority")],
       });
 
-      const register = await client.sendTransaction([
-        getRegisterFilmInstruction({
-          submitter: client.payer,
-          organization: organizationPda,
-          membership: membershipPda,
-          film: filmPda,
-          eventAuthority,
-          program: FILM_PROGRAM_ADDRESS,
+      const { film, registerSignature, replicaSignatures } = await ensureFilmOnChain(
+        {
+          rpc: client.rpc,
+          send: (instruction) => client.sendTransaction([instruction]),
+        },
+        {
+          filmPda,
           cid,
           cidLen,
           byteSize: BigInt(content.byteLength),
-          chunkingProfile: 1,
+          chunkingProfile: CHUNKING_PROFILE,
           title: options.title,
-        }),
-      ]);
+          peers,
+          registerInstruction: () =>
+            getRegisterFilmInstruction({
+              submitter: client.payer,
+              organization: organizationPda,
+              membership: membershipPda,
+              film: filmPda,
+              eventAuthority,
+              program: FILM_PROGRAM_ADDRESS,
+              cid,
+              cidLen,
+              byteSize: BigInt(content.byteLength),
+              chunkingProfile: CHUNKING_PROFILE,
+              title: options.title,
+            }),
+          declareInstruction: (peerId) =>
+            getDeclareReplicaInstruction({
+              authority: client.payer,
+              organization: organizationPda,
+              membership: membershipPda,
+              film: filmPda,
+              eventAuthority,
+              program: FILM_PROGRAM_ADDRESS,
+              peerId,
+              peerIdLen: peerId.length,
+            }),
+          log: (line) => console.error(line),
+        },
+      );
 
-      const replicaSignatures: string[] = [];
-      for (const peer of peers) {
-        const declared = await client.sendTransaction([
-          getDeclareReplicaInstruction({
-            film: filmPda,
-            submitter: client.payer,
-            peerId: peer.bytes,
-            peerIdLen: peer.bytes.length,
-          }),
-        ]);
-        replicaSignatures.push(declared.context.signature);
-      }
-
-      const film = await fetchFilm(client.rpc, filmPda);
       const inventory = inventoryRecordFromFilm({
         workId: work.work_id,
         filmPda,
-        film: film.data,
+        film,
         sizeBand: work.size_band,
         coldCid: work.cold_cid,
         sha256,
-        registerSignature: register.context.signature,
+        registerSignature,
         replicaSignatures,
         rpcEndpoint: describeEndpoint(resolveRpcUrl(options)).host,
       });
 
       // stdout carries only the golden inventory line; human status goes to stderr.
       console.error(
-        `Film "${options.title}" registered at ${filmPda} with ${peers.length} replica(s).`,
+        `Film "${film.title}" at ${filmPda} has ${replicaSignatures.length} active replica(s).`,
       );
-      console.error(`Transaction: ${register.context.signature}`);
+      console.error(`Transaction: ${registerSignature}`);
       console.log(JSON.stringify(inventory));
     } catch (error) {
       handleCliError(error);

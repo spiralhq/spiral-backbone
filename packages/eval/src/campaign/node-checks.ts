@@ -1,7 +1,11 @@
 import { execFile, spawn } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { remoteKuboVersion, type SshTarget } from "../../../../scripts/kubo-node-control";
+import {
+  remoteKuboVersion,
+  remoteSudoRefusals,
+  type SshTarget,
+} from "../../../../scripts/kubo-node-control";
 import { assertNetworkNodeAlive, pingPeer } from "../h2/probes";
 import { sshReplicaController, type ReplicaController } from "../h2/state";
 import { sshTargetOf, type Topology } from "../h2/topology";
@@ -39,6 +43,25 @@ export function replicaChecks(
         throw new Error(`${replica.name}: Kubo ${version}, expected ${expectedKubo}`);
       }
       return `active, swarm reachable, Kubo ${version}`;
+    },
+  }));
+}
+
+export function replicaSudoChecks(
+  topology: Topology,
+  sudoRefusals: (target: SshTarget, service: string) => Promise<string[]> = remoteSudoRefusals,
+): Check[] {
+  return topology.replicas.map((replica) => ({
+    stage: "infra",
+    name: `replica ${replica.name} sudo`,
+    run: async () => {
+      const refused = await sudoRefusals(sshTargetOf(replica), replica.service);
+      if (refused.length > 0) {
+        throw new Error(
+          `${replica.name}: sudoers has no NOPASSWD rule for ${refused.map((c) => `\`${c}\``).join(" or ")}`,
+        );
+      }
+      return `NOPASSWD systemctl --no-block start and stop ${replica.service}`;
     },
   }));
 }

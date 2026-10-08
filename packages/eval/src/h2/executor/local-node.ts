@@ -13,7 +13,8 @@ import {
 } from "./provenance";
 
 const execFileAsync = promisify(execFile);
-const ipfs = (args: string[]) => execFileAsync("ipfs", args, { maxBuffer: 16 * 1024 * 1024 });
+const ipfs = (args: string[], timeout = 0) =>
+  execFileAsync("ipfs", args, { maxBuffer: 16 * 1024 * 1024, timeout });
 const repo = () => process.env["IPFS_PATH"] ?? "/tmp/ipfs-repo";
 
 export async function initFreshNode(opts: {
@@ -39,7 +40,12 @@ export async function initFreshNode(opts: {
   await ipfs(["config", "--json", "Discovery.MDNS.Enabled", "false"]);
 }
 
-export async function startDaemon(readyTimeoutMs = 60_000): Promise<{ stop(): Promise<void> }> {
+export const DAEMON_READY_TIMEOUT_MS = 60_000;
+export const PROVENANCE_TIMEOUT_MS = 60_000;
+
+export async function startDaemon(
+  readyTimeoutMs = DAEMON_READY_TIMEOUT_MS,
+): Promise<{ stop(): Promise<void> }> {
   const daemon = spawn("ipfs", ["daemon"], { stdio: ["ignore", "pipe", "pipe"] });
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(
@@ -100,24 +106,34 @@ export async function catToFile(
 export async function provenance(
   declared: Set<string>,
   retrievedCid: string | null,
+  budgetMs = PROVENANCE_TIMEOUT_MS,
 ): Promise<Provenance> {
-  const stat = parseBitswapStat(
-    (await ipfs(["bitswap", "stat", "--verbose", "--enc=json"])).stdout,
-  );
-  const swarm = parseSwarmPeers((await ipfs(["swarm", "peers"])).stdout);
+  const deadline = Date.now() + budgetMs;
+  const read = async (args: string[]) => {
+    const remaining = deadline - Date.now();
+    try {
+      if (remaining <= 0) throw new Error("no time left");
+      return (await ipfs(args, remaining)).stdout;
+    } catch (error) {
+      if (remaining <= 0 || (error as { killed?: boolean }).killed) {
+        throw new Error(`provenance exceeded its ${budgetMs / 1000} s budget at ipfs ${args[0]}`);
+      }
+      throw error;
+    }
+  };
+  const stat = parseBitswapStat(await read(["bitswap", "stat", "--verbose", "--enc=json"]));
+  const swarm = parseSwarmPeers(await read(["swarm", "peers"]));
   const rows: PeerBytes[] = [];
   for (const peer of new Set([...swarm, ...stat.peers])) {
-    const ledger = await ipfs(["bitswap", "ledger", peer]);
     rows.push({
       peer_id: peer,
-      bytes_received: parseLedgerBytesReceived(ledger.stdout),
+      bytes_received: parseLedgerBytesReceived(await read(["bitswap", "ledger", peer])),
       declared: declared.has(peer),
     });
   }
   const dagSize = retrievedCid
     ? parseDagStatSize(
-        (await ipfs(["dag", "stat", "--offline", "--progress=false", "--enc=json", retrievedCid]))
-          .stdout,
+        await read(["dag", "stat", "--offline", "--progress=false", "--enc=json", retrievedCid]),
       )
     : null;
   return summarizeProvenance(rows, stat, dagSize);

@@ -43,7 +43,9 @@ export const frozenPlanSchema = z
     run_id: z.string(),
     created_at: z.string(),
     golden_sha256: z.string().regex(/^[0-9a-f]{64}$/),
-    campaign: campaignSpecSchema,
+    campaign: campaignSpecSchema.extend({
+      max_end_attempts: campaignSpecSchema.shape.max_end_attempts.optional(),
+    }),
     blocks: z.array(plannedBlockSchema),
   })
   .strict();

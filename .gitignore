@@ -65,3 +65,10 @@ plans/
 
 # Daily campaign snapshots (see docs/campaign-runbook.md)
 archive/
+
+# Campaign secrets and identities
+topology.json
+*keypair*.json
+identity-*.json
+preflight-*.md
+scratch/

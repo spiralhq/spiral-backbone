@@ -1,5 +1,11 @@
 import type { ResultRecord } from "@spiral-backbone/protocol";
-import { parseScenario, scenarioFor, validGenerations, type BlockRecord } from "../h2/blocks-log";
+import {
+  isExtraGeneration,
+  parseScenario,
+  scenarioFor,
+  validGenerations,
+  type BlockRecord,
+} from "../h2/blocks-log";
 import type { PlannedBlock } from "../h2/plan";
 import type { H2Evidence } from "./load";
 
@@ -36,17 +42,20 @@ export const H2_AUDIT_HEADERS = ["metric", "min", "median", "p95", "max"];
 const SIZE_BAND_ORDER = ["small", "medium", "large"];
 const KIND_ORDER = ["main", "cold-start", "degradation"];
 
+interface Acceptance {
+  successes: number;
+  denominator: number;
+  externalCache: number;
+  rate: number | null;
+}
+
 export interface H2Summary {
   rateRows: string[][];
   byReplicaRows: string[][];
   maxActiveReplicas: number;
-  threeReplicaAcceptance: {
-    activeReplicas: number;
-    successes: number;
-    denominator: number;
-    externalCache: number;
-    rate: number | null;
-  } | null;
+  threeReplicaAcceptance: (Acceptance & { activeReplicas: number }) | null;
+  directOnlyAcceptance: Acceptance | null;
+  oneReplicaDirect: { successes: number; denominator: number; rate: number | null } | null;
   latencyRows: string[][];
   failureRows: string[][];
   included: number;
@@ -54,6 +63,7 @@ export interface H2Summary {
   excludedNoEnd: number;
   directSuccessAtZero: number;
   directCacheAtZero: number;
+  extraGenerations: string[];
 }
 
 export function percentile(values: number[], p: number): number {
@@ -90,6 +100,12 @@ function rateOf(rows: ResultRecord[]) {
   };
 }
 
+function acceptanceOf(rows: ResultRecord[]): Acceptance | null {
+  if (rows.length === 0) return null;
+  const { cache, successes, denominator, rate } = rateOf(rows);
+  return { successes, denominator, externalCache: cache, rate };
+}
+
 const percent = (rate: number | null) => (rate === null ? "—" : `${(rate * 100).toFixed(1)}%`);
 
 const rateCells = (rows: ResultRecord[]) => {
@@ -97,19 +113,43 @@ const rateCells = (rows: ResultRecord[]) => {
   return [String(rows.length), String(successes), String(cache), percent(rate)];
 };
 
+export function h2ExtraGenerationsLine(extraGenerations: string[]): string {
+  return `Generations beyond the campaign limit: ${extraGenerations.length} (block ${extraGenerations.join(", ")})\n`;
+}
+
+const truncatedPercent = (successes: number, denominator: number) =>
+  denominator === 0 ? "—" : `${(Math.floor((successes * 10_000) / denominator) / 100).toFixed(2)}%`;
+
+const criterionVerdict = (rate: number | null) =>
+  rate === null ? "no data" : rate >= 0.95 ? "met" : "NOT met";
+
+const replicaNoun = (n: number) => `${n} active ${n === 1 ? "replica" : "replicas"}`;
+
 export function h2AcceptanceLine(
   summary: Pick<H2Summary, "maxActiveReplicas" | "threeReplicaAcceptance">,
 ): string {
-  const n = summary.maxActiveReplicas;
-  const subject = `**Success with ${n} active ${n === 1 ? "replica" : "replicas"}:`;
+  const subject = `**Success with ${replicaNoun(summary.maxActiveReplicas)}:`;
   const a = summary.threeReplicaAcceptance;
   if (a === null) return `${subject} no valid attempts — criterion ≥ 95%: no data**\n`;
-  const shown =
-    a.denominator === 0
-      ? "—"
-      : `${(Math.floor((a.successes * 10_000) / a.denominator) / 100).toFixed(2)}%`;
-  const verdict = a.rate === null ? "no data" : a.rate >= 0.95 ? "met" : "NOT met";
-  return `${subject} ${shown} (${a.successes} of ${a.denominator}, excluding ${a.externalCache} external_cache) — criterion ≥ 95%: ${verdict}**\n`;
+  return `${subject} ${truncatedPercent(a.successes, a.denominator)} (${a.successes} of ${a.denominator}, excluding ${a.externalCache} external_cache) — criterion ≥ 95%: ${criterionVerdict(a.rate)}**\n`;
+}
+
+export function h2DirectOnlyLine(
+  summary: Pick<H2Summary, "maxActiveReplicas" | "directOnlyAcceptance">,
+): string {
+  const subject = `**Direct-only success with ${replicaNoun(summary.maxActiveReplicas)}:`;
+  const a = summary.directOnlyAcceptance;
+  if (a === null) return `${subject} no valid attempts — criterion ≥ 95%: no data**\n`;
+  return `${subject} ${truncatedPercent(a.successes, a.denominator)} (${a.successes} of ${a.denominator}, excluding ${a.externalCache} external_cache) — criterion ≥ 95%: ${criterionVerdict(a.rate)}**\n`;
+}
+
+export function h2OneReplicaLine(summary: Pick<H2Summary, "oneReplicaDirect">): string {
+  const subject = "**Direct success with 1 active replica:";
+  const a = summary.oneReplicaDirect;
+  if (a === null) return `${subject} no valid attempts — recovery operational: no data**\n`;
+  const verdict = a.rate === null ? "no data" : a.successes > 0 ? "yes" : "no";
+  const shown = a.denominator === 0 ? "—" : truncatedPercent(a.successes, a.denominator);
+  return `${subject} ${a.successes} of ${a.denominator} (${shown}) — recovery operational: ${verdict}**\n`;
 }
 
 const byKeys =
@@ -119,6 +159,20 @@ const byKeys =
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i]! < kb[i]! ? -1 : 1;
     return 0;
   };
+
+export function assertNoDuplicateH2Results(records: ResultRecord[]): void {
+  const seen = new Map<string, number>();
+  for (const r of records) {
+    const key = `run_id ${r.run_id}, scenario ${r.scenario}, work_id ${r.work_id}, method ${r.method}, attempt ${r.attempt}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  const duplicate = [...seen].find(([, count]) => count > 1);
+  if (duplicate) {
+    throw new Error(
+      `duplicate H2 result (${duplicate[0]}) appears ${duplicate[1]} times in the results; the artifacts were written twice for one attempt — investigate before reporting`,
+    );
+  }
+}
 
 export function summarizeH2(
   records: ResultRecord[],
@@ -172,17 +226,14 @@ export function summarizeH2(
     .sort(byKeys((row) => [-Number(row[0]), row[1]!]));
 
   const topRows = included.filter((r) => activeOf(r) === maxActiveReplicas);
-  const atTop = rateOf(topRows);
-  const threeReplicaAcceptance =
-    topRows.length === 0
+  const top = acceptanceOf(topRows);
+  const threeReplicaAcceptance = top && { activeReplicas: maxActiveReplicas, ...top };
+  const directOnlyAcceptance = acceptanceOf(topRows.filter((r) => r.method === "direct"));
+  const one = acceptanceOf(included.filter((r) => r.method === "direct" && activeOf(r) === 1));
+  const oneReplicaDirect =
+    one === null
       ? null
-      : {
-          activeReplicas: maxActiveReplicas,
-          successes: atTop.successes,
-          denominator: atTop.denominator,
-          externalCache: atTop.cache,
-          rate: atTop.rate,
-        };
+      : { successes: one.successes, denominator: one.denominator, rate: one.rate };
 
   const latencyRows = [
     ...groupBy(
@@ -228,6 +279,8 @@ export function summarizeH2(
     byReplicaRows,
     maxActiveReplicas,
     threeReplicaAcceptance,
+    directOnlyAcceptance,
+    oneReplicaDirect,
     latencyRows,
     failureRows,
     included: included.length,
@@ -235,6 +288,9 @@ export function summarizeH2(
     excludedNoEnd: own.length - included.length - excludedUnconfirmed,
     directSuccessAtZero,
     directCacheAtZero,
+    extraGenerations: runBlocks
+      .filter(isExtraGeneration)
+      .map((b) => scenarioFor(b.block_name, b.generation)),
   };
 }
 

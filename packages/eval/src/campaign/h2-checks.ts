@@ -2,13 +2,14 @@ import { readFile } from "node:fs/promises";
 import { address, type GetAccountInfoApi, type Rpc } from "@solana/kit";
 import { bytesToCidString, type InventoryRecord } from "@spiral-backbone/protocol";
 import { fetchFilm } from "@spiral-backbone/protocol/generated/film";
+import { remoteRecursivePins, type SshTarget } from "../../../../scripts/kubo-node-control";
 import { manifestSchema, validateManifest } from "../../../../scripts/validate-manifest";
 import { readGolden } from "../common/golden";
 import { campaignSpecSchema, validateCampaign } from "../h2/campaign";
 import { peerIdFromBytes } from "../h2/executor/provenance";
 import { readFilm } from "../h2/executor/registry";
-import { generatePlan, plannedAttemptCount } from "../h2/plan";
-import { checkTopologyMatchesCampaign, type Topology } from "../h2/topology";
+import { generatePlan, goldenDigest, plannedAttemptCount, readPlan } from "../h2/plan";
+import { checkTopologyMatchesCampaign, sshTargetOf, type Topology } from "../h2/topology";
 import type { Check } from "./checks";
 
 export type FilmRpc = Rpc<GetAccountInfoApi>;
@@ -157,6 +158,50 @@ export function campaignFeasibleCheck(
       const golden = await loadGolden(goldenPath);
       const plan = generatePlan({ campaign, golden, runId: "preflight" });
       return `${plannedAttemptCount(plan)} attempts in ${plan.blocks.length} blocks over ${golden.length} works`;
+    },
+  };
+}
+
+export function replicaPinsChecks(
+  topology: Topology,
+  goldenPath: string,
+  deps: { pins?: (target: SshTarget) => Promise<string[]> } = {},
+): Check[] {
+  const pins = deps.pins ?? remoteRecursivePins;
+  return topology.replicas.map((replica) => ({
+    stage: "h2",
+    name: `replica ${replica.name} pins`,
+    run: async () => {
+      const golden = await loadGolden(goldenPath);
+      const pinned = new Set(await pins(sshTargetOf(replica)));
+      const missing = golden.map((g) => g.cid).filter((cid) => !pinned.has(cid));
+      if (missing.length > 0) {
+        const noun = missing.length === 1 ? "CID" : "CIDs";
+        throw new Error(
+          `${replica.name}: ${missing.length} golden ${noun} not pinned: ${missing.join(", ")}`,
+        );
+      }
+      return `${golden.length} of ${golden.length} golden CIDs pinned`;
+    },
+  }));
+}
+
+export function planMatchesGoldenCheck(planPath: string, goldenPath: string): Check {
+  return {
+    stage: "h2",
+    name: "plan ↔ golden",
+    run: async () => {
+      let frozen: string;
+      try {
+        frozen = (await readPlan(planPath)).golden_sha256;
+      } catch {
+        throw new Error(`plan ${planPath} is unreadable or not a valid plan`);
+      }
+      const current = goldenDigest(await loadGolden(goldenPath));
+      if (frozen !== current) {
+        throw new Error(`plan golden_sha256 ${frozen} differs from the current golden ${current}`);
+      }
+      return `golden digest ${current}`;
     },
   };
 }

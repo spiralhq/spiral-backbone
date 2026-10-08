@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { resultRecordSchema } from "@spiral-backbone/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { fetchGenesis } from "../common/cluster";
 import { readJsonLines } from "../common/ndjson";
 import { runStatusSchema } from "../common/run-status";
 import { sidecarPath } from "../common/sidecar";
@@ -13,6 +14,18 @@ import { runH3 } from "./run";
 import { H3_SCENARIOS, REFUSING_PROGRAM_ADDRESS } from "./scenarios";
 
 const skip = shouldSkipE2e("H3 end-to-end");
+
+const OBSERVED_CODES = { 1: 3012, 2: 6001, 3: 6002, 4: 6003, 5: 6004, 6: 0, 7: 3007 };
+
+type Evidence = z.infer<typeof evidenceSchema>;
+
+function expectObservedCodes(evidence: Evidence[]): void {
+  expect(
+    Object.fromEntries(evidence.map((e) => [e.scenario_id, e.observed?.code ?? null])),
+  ).toEqual(OBSERVED_CODES);
+  const duplicate = evidence.find((e) => e.scenario_id === 6)!;
+  expect(duplicate.logs.some((line) => line.includes("already in use"))).toBe(true);
+}
 
 const evidenceSchema = z
   .object({
@@ -41,6 +54,7 @@ describe.skipIf(skip)("eval:h3 against Surfpool", () => {
     const summary = await runH3({
       client,
       rpcUrl: chain.rpcUrl,
+      expectedGenesis: await fetchGenesis(chain.rpcUrl),
       outPath,
       runId: "2026-10-02T12:00:00Z-h3-e2e",
       label: "e2e",
@@ -58,6 +72,7 @@ describe.skipIf(skip)("eval:h3 against Surfpool", () => {
     ]);
 
     const evidence = await readJsonLines(sidecarPath(outPath, "evidence"), evidenceSchema);
+    expectObservedCodes(evidence);
     for (const scenario of H3_SCENARIOS) {
       const entry = evidence.find((e) => e.scenario_id === scenario.id)!;
       expect(entry.observed).toEqual({ index: 0, code: scenario.expectedCode });
@@ -72,10 +87,12 @@ describe.skipIf(skip)("eval:h3 against Surfpool", () => {
     const summary = await runH3({
       client,
       rpcUrl: chain.rpcUrl,
+      expectedGenesis: await fetchGenesis(chain.rpcUrl),
       outPath,
       runId: "2026-10-02T12:00:01Z-h3-e2e2",
       label: "e2e2",
     });
     expect(summary).toEqual({ success: 7, failure: 0 });
+    expectObservedCodes(await readJsonLines(sidecarPath(outPath, "evidence"), evidenceSchema));
   }, 180_000);
 });

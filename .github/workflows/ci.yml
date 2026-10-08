@@ -13,14 +13,22 @@ jobs:
         with:
           node-version: 26
       - run: npm ci
-      # packages/cli/src/e2e/submit-fetch-verify.test.ts (submit -> fetch -> verify against a
-      # real Surfpool surfnet + Kubo container) needs a sibling spiral-programs checkout with
-      # `anchor build` already run, plus the solana-keygen CLI — neither is available on this
-      # runner, and spiral-programs is a private repo, so adding a cross-repo checkout for it
-      # would require a new PAT/deploy-key secret, which is out of scope here. The test detects
-      # this at import time and skips itself (describe.skipIf) with a clear console message
-      # rather than failing; it's exercised for real only in a local dev environment where both
-      # sibling repos are checked out and built, per this plan's Prerequisites section.
+      # These end-to-end suites need a sibling spiral-programs checkout with `anchor build`
+      # already run, plus the solana-keygen CLI, Surfpool and Docker. spiral-programs is a
+      # private repo and adding a cross-repo checkout would need a new PAT/deploy-key secret,
+      # so they skip themselves here with a console message instead of failing:
+      #   packages/cli/src/e2e/submit-fetch-verify.test.ts
+      #   packages/indexer/src/e2e/backfill-surfpool.test.ts
+      #   packages/eval/src/testing/chain.test.ts
+      #   packages/eval/src/h1/h1.e2e.test.ts
+      #   packages/eval/src/h2/h2.e2e.test.ts
+      #   packages/eval/src/h2/executor/executor.e2e.test.ts
+      #   packages/eval/src/h3/h3.e2e.test.ts
+      #   packages/eval/src/h4/h4.e2e.test.ts
+      #   packages/eval/src/campaign/preflight.e2e.test.ts
+      #   packages/eval/src/campaign/chain-checks.e2e.test.ts
+      # A green CI run therefore does not cover them: run `SPIRAL_E2E=required npm run test` on a
+      # workstation with both repos built (docs/campaign-runbook.md, section 0).
       # Also feeds the COPY --from=ipfs/kubo:v0.43.1 in scripts/kubo-node-control.test.ts's
       # fixture image (scripts/fixtures/kubo-node-control-test/Dockerfile).
       - run: docker pull ipfs/kubo:v0.43.1

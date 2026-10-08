@@ -6,4 +6,7 @@
  * @see https://github.com/codama-idl/codama
  */
 
+export * from "./authorityTransferred";
+export * from "./membershipGranted";
 export * from "./membershipRevoked";
+export * from "./membershipRoleUpdated";

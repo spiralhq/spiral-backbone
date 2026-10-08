@@ -13,11 +13,12 @@ import { FILM_PROGRAM_ADDRESS } from "@spiral-backbone/protocol/generated/film";
 import { ORGANIZATION_PROGRAM_ADDRESS } from "@spiral-backbone/protocol/generated/organization";
 import filmIdl from "../../../protocol/src/idl/film.json" with { type: "json" };
 import organizationIdl from "../../../protocol/src/idl/organization.json" with { type: "json" };
+import { DEVNET_GENESIS } from "../common/cluster";
 import type { Check } from "./checks";
 
 const PROGRAM_DATA_HEADER = 45;
 
-export const DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
+export { DEVNET_GENESIS };
 
 export type ChainRpc = Rpc<GetGenesisHashApi & GetAccountInfoApi & GetBalanceApi>;
 

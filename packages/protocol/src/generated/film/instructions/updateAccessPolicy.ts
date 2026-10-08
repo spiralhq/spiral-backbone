@@ -26,18 +26,21 @@ import {
   type Instruction,
   type InstructionWithAccounts,
   type InstructionWithData,
+  type ReadonlyAccount,
   type ReadonlySignerAccount,
   type ReadonlyUint8Array,
   type WritableAccount,
 } from "@solana/kit";
 import {
   getAccountMetaFactory,
+  getAddressFromResolvedInstructionAccount,
   type InstructionAccountInput,
   type InstructionAccountInputAddress,
   type InstructionSignerInput,
   type ResolvedInstructionAccount,
   type ResolvedInstructionAccountMeta,
 } from "@solana/program-client-core";
+import { findMembershipPda } from "../pdas";
 import { FILM_PROGRAM_ADDRESS } from "../programs";
 import {
   getAccessPolicyDecoder,
@@ -46,27 +49,52 @@ import {
   type AccessPolicyArgs,
 } from "../types";
 
-export const UPDATE_ACCESS_POLICY_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  184, 122, 67, 170, 113, 155, 201, 40,
-]);
+export const UPDATE_ACCESS_POLICY_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([184, 122, 67, 170, 113, 155, 201, 40]);
 
 export function getUpdateAccessPolicyDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(UPDATE_ACCESS_POLICY_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    UPDATE_ACCESS_POLICY_DISCRIMINATOR,
+  );
 }
 
 export type UpdateAccessPolicyInstruction<
   TProgram extends string = typeof FILM_PROGRAM_ADDRESS,
+  TAccountAuthority extends string | AccountMeta<string> = string,
+  TAccountOrganization extends string | AccountMeta<string> = string,
+  TAccountMembership extends string | AccountMeta<string> = string,
+  TAccountOrganizationProgram extends string | AccountMeta<string> =
+    "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw",
   TAccountFilm extends string | AccountMeta<string> = string,
-  TAccountSubmitter extends string | AccountMeta<string> = string,
+  TAccountEventAuthority extends string | AccountMeta<string> = string,
+  TAccountProgram extends string | AccountMeta<string> = string,
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
 > = Instruction<TProgram> &
   InstructionWithData<ReadonlyUint8Array> &
   InstructionWithAccounts<
     [
-      TAccountFilm extends string ? WritableAccount<TAccountFilm> : TAccountFilm,
-      TAccountSubmitter extends string
-        ? ReadonlySignerAccount<TAccountSubmitter> & AccountSignerMeta<TAccountSubmitter>
-        : TAccountSubmitter,
+      TAccountAuthority extends string
+        ? ReadonlySignerAccount<TAccountAuthority> &
+            AccountSignerMeta<TAccountAuthority>
+        : TAccountAuthority,
+      TAccountOrganization extends string
+        ? ReadonlyAccount<TAccountOrganization>
+        : TAccountOrganization,
+      TAccountMembership extends string
+        ? ReadonlyAccount<TAccountMembership>
+        : TAccountMembership,
+      TAccountOrganizationProgram extends string
+        ? ReadonlyAccount<TAccountOrganizationProgram>
+        : TAccountOrganizationProgram,
+      TAccountFilm extends string
+        ? WritableAccount<TAccountFilm>
+        : TAccountFilm,
+      TAccountEventAuthority extends string
+        ? ReadonlyAccount<TAccountEventAuthority>
+        : TAccountEventAuthority,
+      TAccountProgram extends string
+        ? ReadonlyAccount<TAccountProgram>
+        : TAccountProgram,
       ...TRemainingAccounts,
     ]
   >;
@@ -110,28 +138,79 @@ export function getUpdateAccessPolicyInstructionDataCodec(): FixedSizeCodec<
   );
 }
 
-export type UpdateAccessPolicyInput<
+export type UpdateAccessPolicyAsyncInput<
+  TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganizationProgram extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountFilm extends InstructionAccountInput = InstructionAccountInput,
-  TAccountSubmitter extends InstructionSignerInput = InstructionSignerInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
 > = {
+  authority: TAccountAuthority;
+  organization: TAccountOrganization;
+  membership?: TAccountMembership;
+  organizationProgram?: TAccountOrganizationProgram;
   film: TAccountFilm;
-  submitter: TAccountSubmitter;
+  eventAuthority: TAccountEventAuthority;
+  program: TAccountProgram;
   newPolicy: UpdateAccessPolicyInstructionDataArgs["newPolicy"];
 };
 
-export function getUpdateAccessPolicyInstruction<
+export async function getUpdateAccessPolicyInstructionAsync<
+  TAccountAuthority extends InstructionSignerInput,
+  TAccountOrganization extends InstructionAccountInput,
+  TAccountMembership extends InstructionAccountInput,
+  TAccountOrganizationProgram extends InstructionAccountInput,
   TAccountFilm extends InstructionAccountInput,
-  TAccountSubmitter extends InstructionSignerInput,
+  TAccountEventAuthority extends InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput,
   TProgramAddress extends Address = typeof FILM_PROGRAM_ADDRESS,
 >(
-  input: UpdateAccessPolicyInput<TAccountFilm, TAccountSubmitter>,
+  input: UpdateAccessPolicyAsyncInput<
+    TAccountAuthority,
+    TAccountOrganization,
+    TAccountMembership,
+    TAccountOrganizationProgram,
+    TAccountFilm,
+    TAccountEventAuthority,
+    TAccountProgram
+  >,
   config?: { programAddress?: TProgramAddress },
-): UpdateAccessPolicyInstruction<
-  TProgramAddress,
-  ResolvedInstructionAccountMeta<TAccountFilm, InstructionAccountInputAddress<TAccountFilm>>,
-  ResolvedInstructionAccountMeta<
-    TAccountSubmitter,
-    InstructionAccountInputAddress<TAccountSubmitter>
+): Promise<
+  UpdateAccessPolicyInstruction<
+    TProgramAddress,
+    ResolvedInstructionAccountMeta<
+      TAccountAuthority,
+      InstructionAccountInputAddress<TAccountAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganization,
+      InstructionAccountInputAddress<TAccountOrganization>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountMembership,
+      InstructionAccountInputAddress<TAccountMembership>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganizationProgram,
+      InstructionAccountInputAddress<TAccountOrganizationProgram>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountFilm,
+      InstructionAccountInputAddress<TAccountFilm>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
   >
 > {
   // Program address.
@@ -142,10 +221,35 @@ export function getUpdateAccessPolicyInstruction<
 
   // Original accounts.
   const originalAccounts = {
-    film: { value: input.film ?? null, isSigner: false, isWritable: true },
-    submitter: {
-      value: input.submitter ?? null,
+    authority: {
+      value: input.authority ?? null,
       isSigner: true,
+      isWritable: false,
+    },
+    organization: {
+      value: input.organization ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    membership: {
+      value: input.membership ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    organizationProgram: {
+      value: input.organizationProgram ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    film: { value: input.film ?? null, isSigner: false, isWritable: true },
+    eventAuthority: {
+      value: input.eventAuthority ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    program: {
+      value: input.program ?? null,
+      isSigner: false,
       isWritable: false,
     },
   };
@@ -157,10 +261,41 @@ export function getUpdateAccessPolicyInstruction<
   // Original args.
   const args = { ...input };
 
+  // Resolve default values.
+  if (!accounts.organizationProgram.value) {
+    accounts.organizationProgram.value =
+      "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw" as Address<"2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw">;
+  }
+  if (!accounts.membership.value) {
+    accounts.membership.value = await findMembershipPda(
+      {
+        organization: getAddressFromResolvedInstructionAccount(
+          "organization",
+          accounts.organization.value,
+        ),
+        authority: getAddressFromResolvedInstructionAccount(
+          "authority",
+          accounts.authority.value,
+        ),
+      },
+      {
+        programAddress: getAddressFromResolvedInstructionAccount(
+          "organizationProgram",
+          accounts.organizationProgram.value,
+        ),
+      },
+    );
+  }
+
   return Object.freeze({
     accounts: [
+      getAccountMeta("authority", accounts.authority),
+      getAccountMeta("organization", accounts.organization),
+      getAccountMeta("membership", accounts.membership),
+      getAccountMeta("organizationProgram", accounts.organizationProgram),
       getAccountMeta("film", accounts.film),
-      getAccountMeta("submitter", accounts.submitter),
+      getAccountMeta("eventAuthority", accounts.eventAuthority),
+      getAccountMeta("program", accounts.program),
     ],
     data: getUpdateAccessPolicyInstructionDataEncoder().encode(
       args as UpdateAccessPolicyInstructionDataArgs,
@@ -168,10 +303,207 @@ export function getUpdateAccessPolicyInstruction<
     programAddress,
   } as UpdateAccessPolicyInstruction<
     TProgramAddress,
-    ResolvedInstructionAccountMeta<TAccountFilm, InstructionAccountInputAddress<TAccountFilm>>,
     ResolvedInstructionAccountMeta<
-      TAccountSubmitter,
-      InstructionAccountInputAddress<TAccountSubmitter>
+      TAccountAuthority,
+      InstructionAccountInputAddress<TAccountAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganization,
+      InstructionAccountInputAddress<TAccountOrganization>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountMembership,
+      InstructionAccountInputAddress<TAccountMembership>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganizationProgram,
+      InstructionAccountInputAddress<TAccountOrganizationProgram>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountFilm,
+      InstructionAccountInputAddress<TAccountFilm>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
+  >);
+}
+
+export type UpdateAccessPolicyInput<
+  TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganizationProgram extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountFilm extends InstructionAccountInput = InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
+> = {
+  authority: TAccountAuthority;
+  organization: TAccountOrganization;
+  membership: TAccountMembership;
+  organizationProgram?: TAccountOrganizationProgram;
+  film: TAccountFilm;
+  eventAuthority: TAccountEventAuthority;
+  program: TAccountProgram;
+  newPolicy: UpdateAccessPolicyInstructionDataArgs["newPolicy"];
+};
+
+export function getUpdateAccessPolicyInstruction<
+  TAccountAuthority extends InstructionSignerInput,
+  TAccountOrganization extends InstructionAccountInput,
+  TAccountMembership extends InstructionAccountInput,
+  TAccountOrganizationProgram extends InstructionAccountInput,
+  TAccountFilm extends InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput,
+  TProgramAddress extends Address = typeof FILM_PROGRAM_ADDRESS,
+>(
+  input: UpdateAccessPolicyInput<
+    TAccountAuthority,
+    TAccountOrganization,
+    TAccountMembership,
+    TAccountOrganizationProgram,
+    TAccountFilm,
+    TAccountEventAuthority,
+    TAccountProgram
+  >,
+  config?: { programAddress?: TProgramAddress },
+): UpdateAccessPolicyInstruction<
+  TProgramAddress,
+  ResolvedInstructionAccountMeta<
+    TAccountAuthority,
+    InstructionAccountInputAddress<TAccountAuthority>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountOrganization,
+    InstructionAccountInputAddress<TAccountOrganization>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountMembership,
+    InstructionAccountInputAddress<TAccountMembership>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountOrganizationProgram,
+    InstructionAccountInputAddress<TAccountOrganizationProgram>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountFilm,
+    InstructionAccountInputAddress<TAccountFilm>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountEventAuthority,
+    InstructionAccountInputAddress<TAccountEventAuthority>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountProgram,
+    InstructionAccountInputAddress<TAccountProgram>
+  >
+> {
+  // Program address.
+  const programAddress = config?.programAddress ?? FILM_PROGRAM_ADDRESS;
+
+  // Account meta helper.
+  const getAccountMeta = getAccountMetaFactory(programAddress, "programId");
+
+  // Original accounts.
+  const originalAccounts = {
+    authority: {
+      value: input.authority ?? null,
+      isSigner: true,
+      isWritable: false,
+    },
+    organization: {
+      value: input.organization ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    membership: {
+      value: input.membership ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    organizationProgram: {
+      value: input.organizationProgram ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    film: { value: input.film ?? null, isSigner: false, isWritable: true },
+    eventAuthority: {
+      value: input.eventAuthority ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    program: {
+      value: input.program ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+  };
+  const accounts = originalAccounts as Record<
+    keyof typeof originalAccounts,
+    ResolvedInstructionAccount
+  >;
+
+  // Original args.
+  const args = { ...input };
+
+  // Resolve default values.
+  if (!accounts.organizationProgram.value) {
+    accounts.organizationProgram.value =
+      "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw" as Address<"2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw">;
+  }
+
+  return Object.freeze({
+    accounts: [
+      getAccountMeta("authority", accounts.authority),
+      getAccountMeta("organization", accounts.organization),
+      getAccountMeta("membership", accounts.membership),
+      getAccountMeta("organizationProgram", accounts.organizationProgram),
+      getAccountMeta("film", accounts.film),
+      getAccountMeta("eventAuthority", accounts.eventAuthority),
+      getAccountMeta("program", accounts.program),
+    ],
+    data: getUpdateAccessPolicyInstructionDataEncoder().encode(
+      args as UpdateAccessPolicyInstructionDataArgs,
+    ),
+    programAddress,
+  } as UpdateAccessPolicyInstruction<
+    TProgramAddress,
+    ResolvedInstructionAccountMeta<
+      TAccountAuthority,
+      InstructionAccountInputAddress<TAccountAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganization,
+      InstructionAccountInputAddress<TAccountOrganization>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountMembership,
+      InstructionAccountInputAddress<TAccountMembership>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountOrganizationProgram,
+      InstructionAccountInputAddress<TAccountOrganizationProgram>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountFilm,
+      InstructionAccountInputAddress<TAccountFilm>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
     >
   >);
 }
@@ -182,8 +514,13 @@ export type ParsedUpdateAccessPolicyInstruction<
 > = {
   programAddress: Address<TProgram>;
   accounts: {
-    film: TAccountMetas[0];
-    submitter: TAccountMetas[1];
+    authority: TAccountMetas[0];
+    organization: TAccountMetas[1];
+    membership: TAccountMetas[2];
+    organizationProgram: TAccountMetas[3];
+    film: TAccountMetas[4];
+    eventAuthority: TAccountMetas[5];
+    program: TAccountMetas[6];
   };
   data: UpdateAccessPolicyInstructionData;
 };
@@ -196,11 +533,14 @@ export function parseUpdateAccessPolicyInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedUpdateAccessPolicyInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 2) {
-    throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS, {
-      actualAccountMetas: instruction.accounts.length,
-      expectedAccountMetas: 2,
-    });
+  if (instruction.accounts.length < 7) {
+    throw new SolanaError(
+      SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
+      {
+        actualAccountMetas: instruction.accounts.length,
+        expectedAccountMetas: 7,
+      },
+    );
   }
   let accountIndex = 0;
   const getNextAccount = () => {
@@ -210,7 +550,17 @@ export function parseUpdateAccessPolicyInstruction<
   };
   return {
     programAddress: instruction.programAddress,
-    accounts: { film: getNextAccount(), submitter: getNextAccount() },
-    data: getUpdateAccessPolicyInstructionDataDecoder().decode(instruction.data),
+    accounts: {
+      authority: getNextAccount(),
+      organization: getNextAccount(),
+      membership: getNextAccount(),
+      organizationProgram: getNextAccount(),
+      film: getNextAccount(),
+      eventAuthority: getNextAccount(),
+      program: getNextAccount(),
+    },
+    data: getUpdateAccessPolicyInstructionDataDecoder().decode(
+      instruction.data,
+    ),
   };
 }

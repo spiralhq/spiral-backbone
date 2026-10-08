@@ -6,6 +6,7 @@ import { generateKeyPairSigner } from "@solana/kit";
 import { resultRecordSchema, type InventoryRecord } from "@spiral-backbone/protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { fetchGenesis } from "../common/cluster";
 import { readJsonLines } from "../common/ndjson";
 import { sidecarPath } from "../common/sidecar";
 import { startKuboContainer, type KuboContainer } from "../kubo-node";
@@ -45,6 +46,7 @@ describe.skipIf(skip)("eval:h1 against Surfpool + Kubo", () => {
     const summary = await runH1({
       golden: [golden],
       rpcUrl: chain.rpcUrl,
+      expectedGenesis: await fetchGenesis(chain.rpcUrl),
       kuboUrl: kubo.apiUrl,
       outPath,
       workDir: mkdtempSync(join(tmpdir(), "h1-e2e-work-")),
@@ -84,6 +86,7 @@ describe.skipIf(skip)("eval:h1 against Surfpool + Kubo", () => {
     const summary = await runH1({
       golden: [ghost, golden],
       rpcUrl: chain.rpcUrl,
+      expectedGenesis: await fetchGenesis(chain.rpcUrl),
       kuboUrl: kubo.apiUrl,
       outPath,
       workDir: mkdtempSync(join(tmpdir(), "h1-e2e-work-")),

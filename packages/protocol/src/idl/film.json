@@ -9,16 +9,74 @@
   "instructions": [
     {
       "name": "deactivate_replica",
-      "discriminator": [114, 174, 155, 219, 239, 204, 168, 82],
+      "discriminator": [
+        114,
+        174,
+        155,
+        219,
+        239,
+        204,
+        168,
+        82
+      ],
       "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "organization",
+          "relations": [
+            "film"
+          ]
+        },
+        {
+          "name": "membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "organization_program"
+            }
+          }
+        },
+        {
+          "name": "organization_program",
+          "address": "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw"
+        },
         {
           "name": "film",
           "writable": true
         },
         {
-          "name": "submitter",
-          "signer": true,
-          "relations": ["film"]
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -30,23 +88,84 @@
     },
     {
       "name": "declare_replica",
-      "discriminator": [212, 176, 141, 76, 109, 76, 132, 182],
+      "discriminator": [
+        212,
+        176,
+        141,
+        76,
+        109,
+        76,
+        132,
+        182
+      ],
       "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "organization",
+          "relations": [
+            "film"
+          ]
+        },
+        {
+          "name": "membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "organization_program"
+            }
+          }
+        },
+        {
+          "name": "organization_program",
+          "address": "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw"
+        },
         {
           "name": "film",
           "writable": true
         },
         {
-          "name": "submitter",
-          "signer": true,
-          "relations": ["film"]
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
         {
           "name": "peer_id",
           "type": {
-            "array": ["u8", 38]
+            "array": [
+              "u8",
+              38
+            ]
           }
         },
         {
@@ -57,7 +176,16 @@
     },
     {
       "name": "register_film",
-      "discriminator": [138, 132, 154, 171, 227, 0, 159, 126],
+      "discriminator": [
+        138,
+        132,
+        154,
+        171,
+        227,
+        0,
+        159,
+        126
+      ],
       "accounts": [
         {
           "name": "submitter",
@@ -65,8 +193,7 @@
           "signer": true
         },
         {
-          "name": "organization",
-          "writable": true
+          "name": "organization"
         },
         {
           "name": "membership"
@@ -94,7 +221,10 @@
         {
           "name": "cid",
           "type": {
-            "array": ["u8", 64]
+            "array": [
+              "u8",
+              64
+            ]
           }
         },
         {
@@ -117,16 +247,74 @@
     },
     {
       "name": "update_access_policy",
-      "discriminator": [184, 122, 67, 170, 113, 155, 201, 40],
+      "discriminator": [
+        184,
+        122,
+        67,
+        170,
+        113,
+        155,
+        201,
+        40
+      ],
       "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "organization",
+          "relations": [
+            "film"
+          ]
+        },
+        {
+          "name": "membership",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114,
+                  115,
+                  104,
+                  105,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "organization"
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "organization_program"
+            }
+          }
+        },
+        {
+          "name": "organization_program",
+          "address": "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw"
+        },
         {
           "name": "film",
           "writable": true
         },
         {
-          "name": "submitter",
-          "signer": true,
-          "relations": ["film"]
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
         }
       ],
       "args": [
@@ -144,13 +332,70 @@
   "accounts": [
     {
       "name": "Film",
-      "discriminator": [64, 83, 51, 112, 106, 117, 158, 226]
+      "discriminator": [
+        64,
+        83,
+        51,
+        112,
+        106,
+        117,
+        158,
+        226
+      ]
     }
   ],
   "events": [
     {
+      "name": "AccessPolicyUpdated",
+      "discriminator": [
+        88,
+        120,
+        89,
+        67,
+        94,
+        252,
+        93,
+        29
+      ]
+    },
+    {
       "name": "FilmRegistered",
-      "discriminator": [93, 163, 40, 55, 55, 121, 171, 233]
+      "discriminator": [
+        93,
+        163,
+        40,
+        55,
+        55,
+        121,
+        171,
+        233
+      ]
+    },
+    {
+      "name": "ReplicaDeactivated",
+      "discriminator": [
+        165,
+        158,
+        143,
+        153,
+        143,
+        142,
+        131,
+        238
+      ]
+    },
+    {
+      "name": "ReplicaDeclared",
+      "discriminator": [
+        220,
+        87,
+        80,
+        100,
+        255,
+        2,
+        176,
+        59
+      ]
     }
   ],
   "errors": [
@@ -173,6 +418,31 @@
       "code": 6008,
       "name": "InvalidReplicaIndex",
       "msg": "Replica index is out of range"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidPeerId",
+      "msg": "PeerID is not a 38-byte Ed25519 libp2p identity"
+    },
+    {
+      "code": 6010,
+      "name": "DuplicateReplica",
+      "msg": "PeerID already holds an active replica slot"
+    },
+    {
+      "code": 6011,
+      "name": "TitleTooLong",
+      "msg": "Title exceeds 160 bytes"
+    },
+    {
+      "code": 6012,
+      "name": "CidPaddingNotZero",
+      "msg": "CID buffer must be zero after cid_len"
+    },
+    {
+      "code": 6013,
+      "name": "ReplicaCountOverflow",
+      "msg": "Replica count overflowed"
     }
   ],
   "types": [
@@ -186,6 +456,30 @@
           },
           {
             "name": "OrganizationOnly"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AccessPolicyUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "film",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "policy",
+            "type": {
+              "defined": {
+                "name": "AccessPolicy"
+              }
+            }
           }
         ]
       }
@@ -206,7 +500,10 @@
           {
             "name": "cid",
             "type": {
-              "array": ["u8", 64]
+              "array": [
+                "u8",
+                64
+              ]
             }
           },
           {
@@ -281,7 +578,10 @@
           {
             "name": "cid",
             "type": {
-              "array": ["u8", 64]
+              "array": [
+                "u8",
+                64
+              ]
             }
           },
           {
@@ -402,6 +702,39 @@
       }
     },
     {
+      "name": "ReplicaDeactivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "film",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "peer_id",
+            "type": {
+              "array": [
+                "u8",
+                38
+              ]
+            }
+          },
+          {
+            "name": "was_active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "ReplicaDeclaration",
       "type": {
         "kind": "struct",
@@ -409,7 +742,10 @@
           {
             "name": "peer_id",
             "type": {
-              "array": ["u8", 38]
+              "array": [
+                "u8",
+                38
+              ]
             }
           },
           {
@@ -423,6 +759,54 @@
           {
             "name": "active",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReplicaDeclared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "film",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "peer_id",
+            "type": {
+              "array": [
+                "u8",
+                38
+              ]
+            }
+          },
+          {
+            "name": "peer_id_len",
+            "type": "u8"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "reactivated",
+            "type": "bool"
+          },
+          {
+            "name": "replaced_peer_id",
+            "type": {
+              "option": {
+                "array": [
+                  "u8",
+                  38
+                ]
+              }
+            }
           }
         ]
       }

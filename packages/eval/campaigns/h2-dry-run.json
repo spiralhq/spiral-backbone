@@ -3,6 +3,7 @@
   "replica_nodes": ["a", "b", "c"],
   "stabilization_ms": 3000,
   "max_gate_attempts": 10,
+  "max_end_attempts": 2,
   "max_block_generations": 3,
   "timeout": { "base_ms": 20000, "per_mb_ms": 1000 },
   "blocks": [

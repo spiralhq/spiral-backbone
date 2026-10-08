@@ -8,6 +8,8 @@ import { createSolanaRpc } from "@solana/kit";
 import type { InventoryRecord } from "@spiral-backbone/protocol";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { secretsOf } from "../h2/command";
+import { loadCampaign } from "../h2/campaign";
+import { generatePlan, writePlan } from "../h2/plan";
 import { peerIdFromBytes } from "../h2/executor/provenance";
 import { buildExecutorImage } from "../h2/executor/image";
 import { peerIdBytes } from "../h2/testing/fixtures";
@@ -29,7 +31,14 @@ const docker = (args: string[]) => execFileAsync("docker", args, { timeout: 120_
 const skip = shouldSkipE2e("campaign pre-flight");
 const PRESET = join(import.meta.dirname, "..", "..", "campaigns", "h2-dry-run.json");
 const BASELINE = ["manifest (--final)", "chunking conformance"];
-const H2_ROWS = ["golden ↔ manifest", "Films ↔ golden ↔ topology", "campaign plan"];
+const H2_ROWS = [
+  "golden ↔ manifest",
+  "Films ↔ golden ↔ topology",
+  "replica a pins",
+  "replica b pins",
+  "replica c pins",
+  "campaign plan",
+];
 
 function manifestWork(record: InventoryRecord) {
   return {
@@ -215,6 +224,9 @@ describe.skipIf(skip)("campaign:preflight against Surfpool and the local Docker 
         "replica a",
         "replica b",
         "replica c",
+        "replica a sudo",
+        "replica b sudo",
+        "replica c sudo",
         "network node",
         "gateway",
         "executor image",
@@ -222,7 +234,7 @@ describe.skipIf(skip)("campaign:preflight against Surfpool and the local Docker 
       ]);
       expect(rows.filter((r) => r[2] === "BLOCKED").map((r) => r[1])).toEqual(BASELINE);
       expect(stdout).toContain("| infra | chunking conformance | BLOCKED | skipped by flag |");
-      expect(stdout).toContain("Pre-flight: BLOCKED (2 of 15 checks failed)");
+      expect(stdout).toContain("Pre-flight: BLOCKED (2 of 21 checks failed)");
       expect(stdout).not.toContain("Pre-flight: READY");
       expect(stdout).not.toContain(chain.rpcUrl);
     } finally {
@@ -237,7 +249,7 @@ describe.skipIf(skip)("campaign:preflight against Surfpool and the local Docker 
     await docker(["exec", b, "systemctl", "stop", "ipfs"]);
     try {
       const results = await check("all");
-      expectBlocked(results, [...BASELINE, "replica b", "network node"]);
+      expectBlocked(results, [...BASELINE, "replica b", "replica b pins", "network node"]);
       expect(detailOf(results, "replica b")).toMatch(/not active/);
       const peerB = topology.replicas.find((r) => r.name === "b")!.peer_id;
       expect(detailOf(results, "network node")).toBe(`no ping answer from ${peerB}`);
@@ -254,12 +266,77 @@ describe.skipIf(skip)("campaign:preflight against Surfpool and the local Docker 
       const started = Date.now();
       const results = await check("all");
       expect(Date.now() - started).toBeLessThan(90_000);
-      expectBlocked(results, [...BASELINE, "replica c", "network node"]);
+      expectBlocked(results, [
+        ...BASELINE,
+        "replica c",
+        "replica c sudo",
+        "replica c pins",
+        "network node",
+      ]);
       expect(detailOf(results, "replica c")).toMatch(/SSH to 127\.0\.0\.1:\d+ failed/);
     } finally {
       await docker(["unpause", c]);
       await waitHealthy();
     }
+  }, 300_000);
+
+  it("a replica whose sudoers lacks --no-block blocks only replica b sudo", async () => {
+    const b = await containerOf("b");
+    const sudoers = "/etc/sudoers.d/spiral";
+    const { stdout: original } = await docker(["exec", b, "cat", sudoers]);
+    const legacy =
+      "spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl start ipfs, /usr/bin/systemctl stop ipfs";
+    const write = (line: string) =>
+      docker(["exec", b, "sh", "-c", `printf '%s\\n' "$1" > ${sudoers}`, "sh", line]);
+    await write(legacy);
+    try {
+      const results = await check("all");
+      expectBlocked(results, [...BASELINE, "replica b sudo"]);
+      expect(detailOf(results, "replica b sudo")).toBe(
+        "b: sudoers has no NOPASSWD rule for `/usr/bin/systemctl --no-block start ipfs` or `/usr/bin/systemctl --no-block stop ipfs`",
+      );
+    } finally {
+      await write(original.trim());
+    }
+    expectBlocked(await check("infra"), BASELINE);
+  }, 300_000);
+
+  it("an unpinned golden CID on replica b blocks only replica b pins", async () => {
+    const [warm] = readFileSync(paths.golden, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as InventoryRecord);
+    const b = await containerOf("b");
+    const ipfs = (command: string) =>
+      docker(["exec", b, "su", "ipfs", "-c", `export IPFS_PATH=/home/ipfs/.ipfs; ipfs ${command}`]);
+    await ipfs(`pin rm ${warm!.cid}`);
+    try {
+      const results = await check("h2");
+      expectBlocked(results, ["replica b pins"]);
+      expect(detailOf(results, "replica b pins")).toBe(`b: 1 golden CID not pinned: ${warm!.cid}`);
+    } finally {
+      await ipfs(`pin add ${warm!.cid}`);
+    }
+    expectBlocked(await check("h2"), []);
+  }, 300_000);
+
+  it("a plan frozen from a different golden blocks only plan ↔ golden", async () => {
+    const planPath = join(dir, "plan.json");
+    const golden = readFileSync(paths.golden, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as InventoryRecord);
+    await writePlan(
+      planPath,
+      generatePlan({
+        campaign: await loadCampaign(PRESET),
+        golden: golden.slice(0, 1),
+        runId: "e2e",
+      }),
+    );
+    const results = await check("h2", { planPath });
+    expectBlocked(results, ["plan ↔ golden"]);
+    expect(detailOf(results, "plan ↔ golden")).toMatch(/golden_sha256 [0-9a-f]{64} differs/);
   }, 300_000);
 
   it("a wrong executor image name blocks the executor image", async () => {
@@ -309,7 +386,11 @@ describe.skipIf(skip)("campaign:preflight against Surfpool and the local Docker 
         replicas: [...topology.replicas, { ...topology.replicas[0]!, name: "d", peer_id: fake }],
       },
     });
-    expect(results.map((r) => r.name)).toEqual(H2_ROWS);
+    expect(results.map((r) => r.name)).toEqual([
+      ...H2_ROWS.slice(0, 5),
+      "replica d pins",
+      "campaign plan",
+    ]);
     expectBlocked(results, ["Films ↔ golden ↔ topology"]);
     expect(detailOf(results, "Films ↔ golden ↔ topology")).toBe(
       `pd-901: missing ${fake}; pd-902: missing ${fake}`,

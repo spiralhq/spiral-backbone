@@ -45,6 +45,10 @@ that matches a discriminator but cannot be decoded, has out-of-range lengths, or
 `schemaVersion` other than 1 (organizations and films; memberships have none) aborts the run with
 its address: skipping it would hide a missing record from H4.
 
+The on-chain programs also emit events (including the organization's `MembershipGranted`,
+`MembershipRoleUpdated`, `AuthorityTransferred` and `MembershipRevoked`); the indexer deliberately
+does not decode them, for the same reason.
+
 ## Schema notes
 
 - Columns mirror the generated account types exactly (e.g. `Organization` has no `film_count`,

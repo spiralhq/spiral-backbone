@@ -29,7 +29,9 @@ export async function findMembershipPda(
   return await getProgramDerivedAddress({
     programAddress,
     seeds: [
-      getBytesEncoder().encode(new Uint8Array([109, 101, 109, 98, 101, 114, 115, 104, 105, 112])),
+      getBytesEncoder().encode(
+        new Uint8Array([109, 101, 109, 98, 101, 114, 115, 104, 105, 112]),
+      ),
       getAddressEncoder().encode(seeds.organization),
       getAddressEncoder().encode(seeds.member),
     ],

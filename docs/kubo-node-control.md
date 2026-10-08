@@ -42,6 +42,13 @@ default — `SshTarget.insecureHostKeyChecking` exists only so ephemeral
 test containers with a freshly-generated key and no stable identity can
 opt out; real usage against real nodes must never set it.
 
+An SSH-level failure (exit 255, the timeout, a kill or a spawn error) is a
+probe fault and throws; `checkSystemdActive` returns `false` only when
+`systemctl is-active` itself answers an inactive state (exit 3). Reachability,
+`is-active`, start and stop retry probe faults up to 3 tries (2 s, then 4 s).
+Start and stop use `systemctl --no-block`, so the 15s cap never waits on a
+slow Kubo shutdown; callers observe the outcome with `checkStatus`.
+
 `checkStatus` reports `{ systemdActive, swarmReachable }` — a double check:
 `systemctl is-active` on the host (no `sudo` needed for a read-only status
 query), plus an independent TCP probe against the swarm port. The probe isn't a bare `connect`: it waits a 300ms grace

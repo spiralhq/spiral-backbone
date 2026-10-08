@@ -80,6 +80,9 @@ export function getMembershipDecoder(): FixedSizeDecoder<Membership> {
   ]);
 }
 
-export function getMembershipCodec(): FixedSizeCodec<MembershipArgs, Membership> {
+export function getMembershipCodec(): FixedSizeCodec<
+  MembershipArgs,
+  Membership
+> {
   return combineCodec(getMembershipEncoder(), getMembershipDecoder());
 }

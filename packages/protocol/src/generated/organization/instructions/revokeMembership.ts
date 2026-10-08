@@ -43,12 +43,13 @@ import {
 import { findAdminMembershipPda, findMembershipPda } from "../pdas";
 import { ORGANIZATION_PROGRAM_ADDRESS } from "../programs";
 
-export const REVOKE_MEMBERSHIP_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  109, 67, 109, 170, 189, 213, 233, 204,
-]);
+export const REVOKE_MEMBERSHIP_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([109, 67, 109, 170, 189, 213, 233, 204]);
 
 export function getRevokeMembershipDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(REVOKE_MEMBERSHIP_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    REVOKE_MEMBERSHIP_DISCRIMINATOR,
+  );
 }
 
 export type RevokeMembershipInstruction<
@@ -66,7 +67,8 @@ export type RevokeMembershipInstruction<
   InstructionWithAccounts<
     [
       TAccountAuthority extends string
-        ? ReadonlySignerAccount<TAccountAuthority> & AccountSignerMeta<TAccountAuthority>
+        ? ReadonlySignerAccount<TAccountAuthority> &
+            AccountSignerMeta<TAccountAuthority>
         : TAccountAuthority,
       TAccountOrganization extends string
         ? ReadonlyAccount<TAccountOrganization>
@@ -74,12 +76,18 @@ export type RevokeMembershipInstruction<
       TAccountAdminMembership extends string
         ? ReadonlyAccount<TAccountAdminMembership>
         : TAccountAdminMembership,
-      TAccountMember extends string ? ReadonlyAccount<TAccountMember> : TAccountMember,
-      TAccountMembership extends string ? WritableAccount<TAccountMembership> : TAccountMembership,
+      TAccountMember extends string
+        ? ReadonlyAccount<TAccountMember>
+        : TAccountMember,
+      TAccountMembership extends string
+        ? WritableAccount<TAccountMembership>
+        : TAccountMembership,
       TAccountEventAuthority extends string
         ? ReadonlyAccount<TAccountEventAuthority>
         : TAccountEventAuthority,
-      TAccountProgram extends string ? ReadonlyAccount<TAccountProgram> : TAccountProgram,
+      TAccountProgram extends string
+        ? ReadonlyAccount<TAccountProgram>
+        : TAccountProgram,
       ...TRemainingAccounts,
     ]
   >;
@@ -98,7 +106,9 @@ export function getRevokeMembershipInstructionDataEncoder(): FixedSizeEncoder<Re
 }
 
 export function getRevokeMembershipInstructionDataDecoder(): FixedSizeDecoder<RevokeMembershipInstructionData> {
-  return getStructDecoder([["discriminator", fixDecoderSize(getBytesDecoder(), 8)]]);
+  return getStructDecoder([
+    ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
+  ]);
 }
 
 export function getRevokeMembershipInstructionDataCodec(): FixedSizeCodec<
@@ -113,11 +123,14 @@ export function getRevokeMembershipInstructionDataCodec(): FixedSizeCodec<
 
 export type RevokeMembershipAsyncInput<
   TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
-  TAccountAdminMembership extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountAdminMembership extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMember extends InstructionAccountInput = InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
-  TAccountEventAuthority extends InstructionAccountInput = InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
 > = {
   authority: TAccountAuthority;
@@ -164,7 +177,10 @@ export async function getRevokeMembershipInstructionAsync<
       TAccountAdminMembership,
       InstructionAccountInputAddress<TAccountAdminMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+    ResolvedInstructionAccountMeta<
+      TAccountMember,
+      InstructionAccountInputAddress<TAccountMember>
+    >,
     ResolvedInstructionAccountMeta<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
@@ -173,7 +189,10 @@ export async function getRevokeMembershipInstructionAsync<
       TAccountEventAuthority,
       InstructionAccountInputAddress<TAccountEventAuthority>
     >,
-    ResolvedInstructionAccountMeta<TAccountProgram, InstructionAccountInputAddress<TAccountProgram>>
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
   >
 > {
   // Program address.
@@ -229,7 +248,10 @@ export async function getRevokeMembershipInstructionAsync<
           "organization",
           accounts.organization.value,
         ),
-        authority: getAddressFromResolvedInstructionAccount("authority", accounts.authority.value),
+        authority: getAddressFromResolvedInstructionAccount(
+          "authority",
+          accounts.authority.value,
+        ),
       },
       { programAddress },
     );
@@ -241,7 +263,10 @@ export async function getRevokeMembershipInstructionAsync<
           "organization",
           accounts.organization.value,
         ),
-        member: getAddressFromResolvedInstructionAccount("member", accounts.member.value),
+        member: getAddressFromResolvedInstructionAccount(
+          "member",
+          accounts.member.value,
+        ),
       },
       { programAddress },
     );
@@ -273,7 +298,10 @@ export async function getRevokeMembershipInstructionAsync<
       TAccountAdminMembership,
       InstructionAccountInputAddress<TAccountAdminMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+    ResolvedInstructionAccountMeta<
+      TAccountMember,
+      InstructionAccountInputAddress<TAccountMember>
+    >,
     ResolvedInstructionAccountMeta<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
@@ -282,17 +310,23 @@ export async function getRevokeMembershipInstructionAsync<
       TAccountEventAuthority,
       InstructionAccountInputAddress<TAccountEventAuthority>
     >,
-    ResolvedInstructionAccountMeta<TAccountProgram, InstructionAccountInputAddress<TAccountProgram>>
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
   >);
 }
 
 export type RevokeMembershipInput<
   TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
-  TAccountAdminMembership extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountAdminMembership extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMember extends InstructionAccountInput = InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
-  TAccountEventAuthority extends InstructionAccountInput = InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
 > = {
   authority: TAccountAuthority;
@@ -338,7 +372,10 @@ export function getRevokeMembershipInstruction<
     TAccountAdminMembership,
     InstructionAccountInputAddress<TAccountAdminMembership>
   >,
-  ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+  ResolvedInstructionAccountMeta<
+    TAccountMember,
+    InstructionAccountInputAddress<TAccountMember>
+  >,
   ResolvedInstructionAccountMeta<
     TAccountMembership,
     InstructionAccountInputAddress<TAccountMembership>
@@ -347,7 +384,10 @@ export function getRevokeMembershipInstruction<
     TAccountEventAuthority,
     InstructionAccountInputAddress<TAccountEventAuthority>
   >,
-  ResolvedInstructionAccountMeta<TAccountProgram, InstructionAccountInputAddress<TAccountProgram>>
+  ResolvedInstructionAccountMeta<
+    TAccountProgram,
+    InstructionAccountInputAddress<TAccountProgram>
+  >
 > {
   // Program address.
   const programAddress = config?.programAddress ?? ORGANIZATION_PROGRAM_ADDRESS;
@@ -420,7 +460,10 @@ export function getRevokeMembershipInstruction<
       TAccountAdminMembership,
       InstructionAccountInputAddress<TAccountAdminMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+    ResolvedInstructionAccountMeta<
+      TAccountMember,
+      InstructionAccountInputAddress<TAccountMember>
+    >,
     ResolvedInstructionAccountMeta<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
@@ -429,7 +472,10 @@ export function getRevokeMembershipInstruction<
       TAccountEventAuthority,
       InstructionAccountInputAddress<TAccountEventAuthority>
     >,
-    ResolvedInstructionAccountMeta<TAccountProgram, InstructionAccountInputAddress<TAccountProgram>>
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
+    >
   >);
 }
 
@@ -459,10 +505,13 @@ export function parseRevokeMembershipInstruction<
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedRevokeMembershipInstruction<TProgram, TAccountMetas> {
   if (instruction.accounts.length < 7) {
-    throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS, {
-      actualAccountMetas: instruction.accounts.length,
-      expectedAccountMetas: 7,
-    });
+    throw new SolanaError(
+      SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
+      {
+        actualAccountMetas: instruction.accounts.length,
+        expectedAccountMetas: 7,
+      },
+    );
   }
   let accountIndex = 0;
   const getNextAccount = () => {

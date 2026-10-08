@@ -8,7 +8,8 @@ COPY --from=ipfs/kubo:v0.43.1 /usr/local/bin/ipfs /usr/local/bin/ipfs
 
 RUN mkdir -p /run/sshd \
   && useradd -m -s /bin/bash spiral \
-  && echo "spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl" > /etc/sudoers.d/spiral \
+  && echo "spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl --no-block start stand-in, /usr/bin/systemctl --no-block stop stand-in" > /etc/sudoers.d/spiral \
+  && chmod 440 /etc/sudoers.d/spiral \
   && mkdir -p /home/spiral/.ssh \
   && chmod 700 /home/spiral/.ssh
 

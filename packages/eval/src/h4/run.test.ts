@@ -9,7 +9,14 @@ import { readJsonLines } from "../common/ndjson";
 import { runStatusSchema } from "../common/run-status";
 import { sidecarPath } from "../common/sidecar";
 
-const state = vi.hoisted(() => ({ cause: undefined as unknown }));
+const state = vi.hoisted(() => ({
+  cause: undefined as unknown,
+  assertCluster: async (_rpcUrl: string, _genesis: string): Promise<void> => {},
+}));
+
+vi.mock("../common/cluster", () => ({
+  assertExpectedCluster: (rpcUrl: string, genesis: string) => state.assertCluster(rpcUrl, genesis),
+}));
 
 vi.mock("@spiral-backbone/indexer", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@spiral-backbone/indexer")>();
@@ -46,6 +53,7 @@ const golden = ["pd-1", "pd-2"].map(
     ({
       work_id,
       film_pda: "11111111111111111111111111111111",
+      organization: "OrgInGolden",
       size_band: "small",
       byte_size: 10,
       cid: "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
@@ -61,6 +69,7 @@ async function run() {
     rpcUrl: "http://127.0.0.1:1",
     outPath,
     runId: "2026-10-02T12:00:00Z-h4-unit",
+    expectedGenesis: "g",
   });
   const runJson = JSON.parse(readFileSync(sidecarPath(outPath, "run"), "utf8"));
   return { result, outPath, runJson };
@@ -69,7 +78,11 @@ async function run() {
 describe("runH4 backfill failure", () => {
   it("records a refutation when the chain could not be projected", async () => {
     const { InvalidAccountError } = await import("@spiral-backbone/indexer");
-    state.cause = new InvalidAccountError("film account X could not be decoded");
+    state.cause = new InvalidAccountError("film account X could not be decoded", {
+      kind: "film",
+      address: "X",
+      organization: "OrgInGolden",
+    });
     const { result, outPath, runJson } = await run();
     expect(result).toEqual({ success: 0, failure: 2, backfillFailed: true });
     const records = await readJsonLines(outPath, resultRecordSchema);
@@ -103,5 +116,68 @@ describe("runH4 backfill failure", () => {
       infrastructure_failure: true,
       backfill: { status: "failed" },
     });
+  });
+
+  it("records a refutation when an organization in the golden is undecodable", async () => {
+    const { InvalidAccountError } = await import("@spiral-backbone/indexer");
+    state.cause = new InvalidAccountError("organization OrgInGolden bad", {
+      kind: "organization",
+      address: "OrgInGolden",
+    });
+    const { result } = await run();
+    expect(result).toEqual({ success: 0, failure: 2, backfillFailed: true });
+  });
+
+  it("treats an undecodable account outside the golden scope as infrastructure", async () => {
+    const { InvalidAccountError } = await import("@spiral-backbone/indexer");
+    for (const scope of [
+      { kind: "film" as const, address: "Stray", organization: "OtherOrg" },
+      { kind: "organization" as const, address: "OtherOrg" },
+      { kind: "film" as const, address: "Stray" },
+    ]) {
+      state.cause = new InvalidAccountError("film account Stray could not be decoded", scope);
+      const { result, outPath, runJson } = await run();
+      expect(result).toEqual({ success: 0, failure: 0, backfillFailed: true });
+      expect(existsSync(outPath)).toBe(false);
+      expect(runJson).toMatchObject({
+        infrastructure_failure: true,
+        error: expect.stringContaining("Stray"),
+      });
+    }
+  });
+
+  it("treats an undecodable account with no scope information as infrastructure", async () => {
+    const { InvalidAccountError } = await import("@spiral-backbone/indexer");
+    state.cause = new InvalidAccountError("film account Y could not be decoded");
+    const { result } = await run();
+    expect(result).toEqual({ success: 0, failure: 0, backfillFailed: true });
+  });
+});
+
+describe("runH4 cluster guard", () => {
+  it("checks the configured endpoint against the expected genesis before writing", async () => {
+    const calls: string[][] = [];
+    state.assertCluster = async (rpcUrl, genesis) => {
+      calls.push([rpcUrl, genesis]);
+      throw new Error("genesis other does not match expected g");
+    };
+    try {
+      const { runH4 } = await import("./run");
+      const outPath = join(mkdtempSync(join(tmpdir(), "h4-run-")), "h4.ndjson");
+      await expect(
+        runH4({
+          golden,
+          db: {} as Database,
+          rpcUrl: "http://127.0.0.1:1",
+          outPath,
+          runId: "2026-10-02T12:00:00Z-h4-guard",
+          expectedGenesis: "g",
+        }),
+      ).rejects.toThrow(/does not match/);
+      expect(calls).toEqual([["http://127.0.0.1:1", "g"]]);
+      expect(existsSync(sidecarPath(outPath, "runs"))).toBe(false);
+    } finally {
+      state.assertCluster = async () => {};
+    }
   });
 });

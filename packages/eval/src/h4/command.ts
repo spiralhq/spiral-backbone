@@ -1,6 +1,7 @@
 import { createDb } from "@spiral-backbone/db";
 import { Command } from "commander";
 import { readGolden } from "../common/golden";
+import { DEVNET_GENESIS } from "../common/cluster";
 import { makeRunId } from "../common/run-id";
 import { resolveH4Options } from "./options";
 import { runH4 } from "./run";
@@ -16,6 +17,7 @@ export const h4Command = new Command("h4")
     "Postgres URL to DROP and rebuild — required, never read from the environment",
   )
   .option("--out <path>", "results NDJSON", "results/h4.ndjson")
+  .option("--expected-genesis <hash>", "expected cluster genesis hash", DEVNET_GENESIS)
   .option("--label <label>", "run label", "run")
   .action(async (flags: Record<string, string | undefined>) => {
     const resolved = resolveH4Options(flags);
@@ -32,6 +34,7 @@ export const h4Command = new Command("h4")
         golden: await readGolden(options.golden),
         db,
         rpcUrl: options.rpcUrl,
+        expectedGenesis: options.expectedGenesis,
         outPath: options.out,
         runId,
       });

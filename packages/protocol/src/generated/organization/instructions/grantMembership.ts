@@ -42,14 +42,20 @@ import {
 } from "@solana/program-client-core";
 import { findAdminMembershipPda, findMembershipPda } from "../pdas";
 import { ORGANIZATION_PROGRAM_ADDRESS } from "../programs";
-import { getRoleDecoder, getRoleEncoder, type Role, type RoleArgs } from "../types";
+import {
+  getRoleDecoder,
+  getRoleEncoder,
+  type Role,
+  type RoleArgs,
+} from "../types";
 
-export const GRANT_MEMBERSHIP_DISCRIMINATOR: ReadonlyUint8Array = new Uint8Array([
-  114, 101, 24, 35, 245, 48, 117, 71,
-]);
+export const GRANT_MEMBERSHIP_DISCRIMINATOR: ReadonlyUint8Array =
+  new Uint8Array([114, 101, 24, 35, 245, 48, 117, 71]);
 
 export function getGrantMembershipDiscriminatorBytes(): ReadonlyUint8Array {
-  return fixEncoderSize(getBytesEncoder(), 8).encode(GRANT_MEMBERSHIP_DISCRIMINATOR);
+  return fixEncoderSize(getBytesEncoder(), 8).encode(
+    GRANT_MEMBERSHIP_DISCRIMINATOR,
+  );
 }
 
 export type GrantMembershipInstruction<
@@ -59,14 +65,18 @@ export type GrantMembershipInstruction<
   TAccountAdminMembership extends string | AccountMeta<string> = string,
   TAccountMember extends string | AccountMeta<string> = string,
   TAccountMembership extends string | AccountMeta<string> = string,
-  TAccountSystemProgram extends string | AccountMeta<string> = "11111111111111111111111111111111",
+  TAccountSystemProgram extends string | AccountMeta<string> =
+    "11111111111111111111111111111111",
+  TAccountEventAuthority extends string | AccountMeta<string> = string,
+  TAccountProgram extends string | AccountMeta<string> = string,
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
 > = Instruction<TProgram> &
   InstructionWithData<ReadonlyUint8Array> &
   InstructionWithAccounts<
     [
       TAccountAuthority extends string
-        ? WritableSignerAccount<TAccountAuthority> & AccountSignerMeta<TAccountAuthority>
+        ? WritableSignerAccount<TAccountAuthority> &
+            AccountSignerMeta<TAccountAuthority>
         : TAccountAuthority,
       TAccountOrganization extends string
         ? WritableAccount<TAccountOrganization>
@@ -74,11 +84,21 @@ export type GrantMembershipInstruction<
       TAccountAdminMembership extends string
         ? ReadonlyAccount<TAccountAdminMembership>
         : TAccountAdminMembership,
-      TAccountMember extends string ? ReadonlyAccount<TAccountMember> : TAccountMember,
-      TAccountMembership extends string ? WritableAccount<TAccountMembership> : TAccountMembership,
+      TAccountMember extends string
+        ? ReadonlyAccount<TAccountMember>
+        : TAccountMember,
+      TAccountMembership extends string
+        ? WritableAccount<TAccountMembership>
+        : TAccountMembership,
       TAccountSystemProgram extends string
         ? ReadonlyAccount<TAccountSystemProgram>
         : TAccountSystemProgram,
+      TAccountEventAuthority extends string
+        ? ReadonlyAccount<TAccountEventAuthority>
+        : TAccountEventAuthority,
+      TAccountProgram extends string
+        ? ReadonlyAccount<TAccountProgram>
+        : TAccountProgram,
       ...TRemainingAccounts,
     ]
   >;
@@ -119,11 +139,17 @@ export function getGrantMembershipInstructionDataCodec(): FixedSizeCodec<
 
 export type GrantMembershipAsyncInput<
   TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
-  TAccountAdminMembership extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountAdminMembership extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMember extends InstructionAccountInput = InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
-  TAccountSystemProgram extends InstructionAccountInput = InstructionAccountInput,
+  TAccountSystemProgram extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
 > = {
   authority: TAccountAuthority;
   organization: TAccountOrganization;
@@ -131,6 +157,8 @@ export type GrantMembershipAsyncInput<
   member: TAccountMember;
   membership?: TAccountMembership;
   systemProgram?: TAccountSystemProgram;
+  eventAuthority: TAccountEventAuthority;
+  program: TAccountProgram;
   role: GrantMembershipInstructionDataArgs["role"];
 };
 
@@ -141,6 +169,8 @@ export async function getGrantMembershipInstructionAsync<
   TAccountMember extends InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput,
   TAccountSystemProgram extends InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput,
   TProgramAddress extends Address = typeof ORGANIZATION_PROGRAM_ADDRESS,
 >(
   input: GrantMembershipAsyncInput<
@@ -149,7 +179,9 @@ export async function getGrantMembershipInstructionAsync<
     TAccountAdminMembership,
     TAccountMember,
     TAccountMembership,
-    TAccountSystemProgram
+    TAccountSystemProgram,
+    TAccountEventAuthority,
+    TAccountProgram
   >,
   config?: { programAddress?: TProgramAddress },
 ): Promise<
@@ -167,7 +199,10 @@ export async function getGrantMembershipInstructionAsync<
       TAccountAdminMembership,
       InstructionAccountInputAddress<TAccountAdminMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+    ResolvedInstructionAccountMeta<
+      TAccountMember,
+      InstructionAccountInputAddress<TAccountMember>
+    >,
     ResolvedInstructionAccountMeta<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
@@ -175,6 +210,14 @@ export async function getGrantMembershipInstructionAsync<
     ResolvedInstructionAccountMeta<
       TAccountSystemProgram,
       InstructionAccountInputAddress<TAccountSystemProgram>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
     >
   >
 > {
@@ -209,6 +252,16 @@ export async function getGrantMembershipInstructionAsync<
     },
     systemProgram: {
       value: input.systemProgram ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    eventAuthority: {
+      value: input.eventAuthority ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    program: {
+      value: input.program ?? null,
       isSigner: false,
       isWritable: false,
     },
@@ -229,7 +282,10 @@ export async function getGrantMembershipInstructionAsync<
           "organization",
           accounts.organization.value,
         ),
-        authority: getAddressFromResolvedInstructionAccount("authority", accounts.authority.value),
+        authority: getAddressFromResolvedInstructionAccount(
+          "authority",
+          accounts.authority.value,
+        ),
       },
       { programAddress },
     );
@@ -241,7 +297,10 @@ export async function getGrantMembershipInstructionAsync<
           "organization",
           accounts.organization.value,
         ),
-        member: getAddressFromResolvedInstructionAccount("member", accounts.member.value),
+        member: getAddressFromResolvedInstructionAccount(
+          "member",
+          accounts.member.value,
+        ),
       },
       { programAddress },
     );
@@ -259,6 +318,8 @@ export async function getGrantMembershipInstructionAsync<
       getAccountMeta("member", accounts.member),
       getAccountMeta("membership", accounts.membership),
       getAccountMeta("systemProgram", accounts.systemProgram),
+      getAccountMeta("eventAuthority", accounts.eventAuthority),
+      getAccountMeta("program", accounts.program),
     ],
     data: getGrantMembershipInstructionDataEncoder().encode(
       args as GrantMembershipInstructionDataArgs,
@@ -278,7 +339,10 @@ export async function getGrantMembershipInstructionAsync<
       TAccountAdminMembership,
       InstructionAccountInputAddress<TAccountAdminMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+    ResolvedInstructionAccountMeta<
+      TAccountMember,
+      InstructionAccountInputAddress<TAccountMember>
+    >,
     ResolvedInstructionAccountMeta<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
@@ -286,17 +350,31 @@ export async function getGrantMembershipInstructionAsync<
     ResolvedInstructionAccountMeta<
       TAccountSystemProgram,
       InstructionAccountInputAddress<TAccountSystemProgram>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
     >
   >);
 }
 
 export type GrantMembershipInput<
   TAccountAuthority extends InstructionSignerInput = InstructionSignerInput,
-  TAccountOrganization extends InstructionAccountInput = InstructionAccountInput,
-  TAccountAdminMembership extends InstructionAccountInput = InstructionAccountInput,
+  TAccountOrganization extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountAdminMembership extends InstructionAccountInput =
+    InstructionAccountInput,
   TAccountMember extends InstructionAccountInput = InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput = InstructionAccountInput,
-  TAccountSystemProgram extends InstructionAccountInput = InstructionAccountInput,
+  TAccountSystemProgram extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput =
+    InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput = InstructionAccountInput,
 > = {
   authority: TAccountAuthority;
   organization: TAccountOrganization;
@@ -304,6 +382,8 @@ export type GrantMembershipInput<
   member: TAccountMember;
   membership: TAccountMembership;
   systemProgram?: TAccountSystemProgram;
+  eventAuthority: TAccountEventAuthority;
+  program: TAccountProgram;
   role: GrantMembershipInstructionDataArgs["role"];
 };
 
@@ -314,6 +394,8 @@ export function getGrantMembershipInstruction<
   TAccountMember extends InstructionAccountInput,
   TAccountMembership extends InstructionAccountInput,
   TAccountSystemProgram extends InstructionAccountInput,
+  TAccountEventAuthority extends InstructionAccountInput,
+  TAccountProgram extends InstructionAccountInput,
   TProgramAddress extends Address = typeof ORGANIZATION_PROGRAM_ADDRESS,
 >(
   input: GrantMembershipInput<
@@ -322,7 +404,9 @@ export function getGrantMembershipInstruction<
     TAccountAdminMembership,
     TAccountMember,
     TAccountMembership,
-    TAccountSystemProgram
+    TAccountSystemProgram,
+    TAccountEventAuthority,
+    TAccountProgram
   >,
   config?: { programAddress?: TProgramAddress },
 ): GrantMembershipInstruction<
@@ -339,7 +423,10 @@ export function getGrantMembershipInstruction<
     TAccountAdminMembership,
     InstructionAccountInputAddress<TAccountAdminMembership>
   >,
-  ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+  ResolvedInstructionAccountMeta<
+    TAccountMember,
+    InstructionAccountInputAddress<TAccountMember>
+  >,
   ResolvedInstructionAccountMeta<
     TAccountMembership,
     InstructionAccountInputAddress<TAccountMembership>
@@ -347,6 +434,14 @@ export function getGrantMembershipInstruction<
   ResolvedInstructionAccountMeta<
     TAccountSystemProgram,
     InstructionAccountInputAddress<TAccountSystemProgram>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountEventAuthority,
+    InstructionAccountInputAddress<TAccountEventAuthority>
+  >,
+  ResolvedInstructionAccountMeta<
+    TAccountProgram,
+    InstructionAccountInputAddress<TAccountProgram>
   >
 > {
   // Program address.
@@ -383,6 +478,16 @@ export function getGrantMembershipInstruction<
       isSigner: false,
       isWritable: false,
     },
+    eventAuthority: {
+      value: input.eventAuthority ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
+    program: {
+      value: input.program ?? null,
+      isSigner: false,
+      isWritable: false,
+    },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
@@ -406,6 +511,8 @@ export function getGrantMembershipInstruction<
       getAccountMeta("member", accounts.member),
       getAccountMeta("membership", accounts.membership),
       getAccountMeta("systemProgram", accounts.systemProgram),
+      getAccountMeta("eventAuthority", accounts.eventAuthority),
+      getAccountMeta("program", accounts.program),
     ],
     data: getGrantMembershipInstructionDataEncoder().encode(
       args as GrantMembershipInstructionDataArgs,
@@ -425,7 +532,10 @@ export function getGrantMembershipInstruction<
       TAccountAdminMembership,
       InstructionAccountInputAddress<TAccountAdminMembership>
     >,
-    ResolvedInstructionAccountMeta<TAccountMember, InstructionAccountInputAddress<TAccountMember>>,
+    ResolvedInstructionAccountMeta<
+      TAccountMember,
+      InstructionAccountInputAddress<TAccountMember>
+    >,
     ResolvedInstructionAccountMeta<
       TAccountMembership,
       InstructionAccountInputAddress<TAccountMembership>
@@ -433,6 +543,14 @@ export function getGrantMembershipInstruction<
     ResolvedInstructionAccountMeta<
       TAccountSystemProgram,
       InstructionAccountInputAddress<TAccountSystemProgram>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountEventAuthority,
+      InstructionAccountInputAddress<TAccountEventAuthority>
+    >,
+    ResolvedInstructionAccountMeta<
+      TAccountProgram,
+      InstructionAccountInputAddress<TAccountProgram>
     >
   >);
 }
@@ -449,6 +567,8 @@ export type ParsedGrantMembershipInstruction<
     member: TAccountMetas[3];
     membership: TAccountMetas[4];
     systemProgram: TAccountMetas[5];
+    eventAuthority: TAccountMetas[6];
+    program: TAccountMetas[7];
   };
   data: GrantMembershipInstructionData;
 };
@@ -461,11 +581,14 @@ export function parseGrantMembershipInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedGrantMembershipInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 6) {
-    throw new SolanaError(SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS, {
-      actualAccountMetas: instruction.accounts.length,
-      expectedAccountMetas: 6,
-    });
+  if (instruction.accounts.length < 8) {
+    throw new SolanaError(
+      SOLANA_ERROR__PROGRAM_CLIENTS__INSUFFICIENT_ACCOUNT_METAS,
+      {
+        actualAccountMetas: instruction.accounts.length,
+        expectedAccountMetas: 8,
+      },
+    );
   }
   let accountIndex = 0;
   const getNextAccount = () => {
@@ -482,6 +605,8 @@ export function parseGrantMembershipInstruction<
       member: getNextAccount(),
       membership: getNextAccount(),
       systemProgram: getNextAccount(),
+      eventAuthority: getNextAccount(),
+      program: getNextAccount(),
     },
     data: getGrantMembershipInstructionDataDecoder().decode(instruction.data),
   };

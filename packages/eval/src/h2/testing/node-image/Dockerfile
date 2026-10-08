@@ -6,7 +6,8 @@ RUN apt-get update \
 COPY --from=kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 RUN useradd -m -s /bin/sh ipfs \
   && useradd -m -s /bin/bash spiral \
-  && echo "spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl" > /etc/sudoers.d/spiral \
+  && echo "spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl --no-block start ipfs, /usr/bin/systemctl --no-block stop ipfs" > /etc/sudoers.d/spiral \
+  && chmod 440 /etc/sudoers.d/spiral \
   && mkdir -p /run/sshd /home/spiral/.ssh /etc/systemd/system/ipfs.service.d \
   && chmod 700 /home/spiral/.ssh
 RUN chown -R spiral:spiral /home/spiral/.ssh

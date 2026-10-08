@@ -111,6 +111,8 @@ async function grant(
       organization,
       member,
       role,
+      eventAuthority: await eventAuthority(ORGANIZATION_PROGRAM_ADDRESS),
+      program: ORGANIZATION_PROGRAM_ADDRESS,
     }),
   ]);
   const [address] = await findMembershipPda({ organization, member });
@@ -162,11 +164,22 @@ async function registerFilm(
   return film;
 }
 
-async function declare(client: FixtureClient, film: Address, peer: number) {
+async function replicaAccounts(client: FixtureClient, organization: Address, film: Address) {
+  const [membership] = await findMembershipPda({ organization, member: client.payer.address });
+  return {
+    authority: client.payer,
+    organization,
+    membership,
+    film,
+    eventAuthority: await eventAuthority(FILM_PROGRAM_ADDRESS),
+    program: FILM_PROGRAM_ADDRESS,
+  };
+}
+
+async function declare(client: FixtureClient, organization: Address, film: Address, peer: number) {
   await client.sendTransaction([
     getDeclareReplicaInstruction({
-      film,
-      submitter: client.payer,
+      ...(await replicaAccounts(client, organization, film)),
       peerId: fixturePeerId(peer),
       peerIdLen: 38,
     }),
@@ -189,15 +202,18 @@ export async function seedCatalog(client: FixtureClient): Promise<SeededCatalog>
   const cid1 = await fixtureCid("h4-film-1");
   const cid2 = await fixtureCid("h4-film-2");
   const film1 = await registerFilm(client, alpha, cid1, "Duck and Cover (fixture)", 57_591_076n);
-  await declare(client, film1, 1);
-  await declare(client, film1, 2);
-  await declare(client, film1, 3);
+  await declare(client, alpha, film1, 1);
+  await declare(client, alpha, film1, 2);
+  await declare(client, alpha, film1, 3);
   await client.sendTransaction([
-    getDeactivateReplicaInstruction({ film: film1, submitter: client.payer, index: 1 }),
+    getDeactivateReplicaInstruction({
+      ...(await replicaAccounts(client, alpha, film1)),
+      index: 1,
+    }),
   ]);
   const film2 = await registerFilm(client, alpha, cid2, "Sem réplicas — ação", 2n ** 40n);
   const film3 = await registerFilm(client, beta, cid1, "Duck and Cover (beta copy)", 57_591_076n);
-  await declare(client, film3, 4);
+  await declare(client, beta, film3, 4);
 
   const [alphaAdmin] = await findMembershipPda({ organization: alpha, member: payer });
   const [betaAdmin] = await findMembershipPda({ organization: beta, member: payer });

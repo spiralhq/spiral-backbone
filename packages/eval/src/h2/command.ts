@@ -1,10 +1,21 @@
+import { resolve } from "node:path";
 import { Command } from "commander";
 import { readGolden } from "../common/golden";
+import { redact, secretsOfUrls } from "../common/redact";
 import { makeRunId } from "../common/run-id";
 import { loadCampaign } from "./campaign";
 import { expectedDeclaredOf, payloadContextOf, realDeps } from "./deps";
+import { h2ExitCode } from "./exit-code";
 import { runPlan } from "./orchestrator";
-import { generatePlan, plannedAttemptCount, planPath, readPlan, writePlan } from "./plan";
+import {
+  generatePlan,
+  goldenDigest,
+  plannedAttemptCount,
+  planPath,
+  readPlan,
+  writePlan,
+} from "./plan";
+import { acquireRunLock } from "./run-lock";
 import { checkTopologyMatchesCampaign, loadTopology, type Topology } from "./topology";
 
 export function resolveRunTarget(flags: {
@@ -18,25 +29,11 @@ export function resolveRunTarget(flags: {
   return flags.plan ?? planPath(flags.plansDir, flags.resume!);
 }
 
-export function secretsOfUrls(urls: string[], extra: string[] = []): string[] {
-  const parts = urls.flatMap((u) => {
-    const url = new URL(u);
-    const tail = url.pathname + url.search;
-    return [u, url.href, url.origin, url.host, url.search, ...(tail !== "/" ? [tail] : [])];
-  });
-  parts.push(...extra);
-  return [...new Set(parts.filter((p) => p.length > 0))].sort((a, b) => b.length - a.length);
-}
-
 export function secretsOf(topology: Topology): string[] {
   return secretsOfUrls(
     [topology.rpc_url, topology.gateway_url, topology.network_node.api_url],
     topology.network_node.bootstrap_multiaddr ? [topology.network_node.bootstrap_multiaddr] : [],
   );
-}
-
-export function redact(message: string, secrets: string[]): string {
-  return secrets.reduce((text, secret) => text.split(secret).join("<redacted>"), message);
 }
 
 function positiveInt(name: string, value: string): number {
@@ -45,9 +42,9 @@ function positiveInt(name: string, value: string): number {
   return n;
 }
 
-const fail = (what: string, error: unknown, secrets: string[] = []) => {
+const fail = (what: string, error: unknown, secrets: string[] = [], exitCode = 1) => {
   console.error(`H2 ${what} failed: ${redact((error as Error).message, secrets)}`);
-  process.exitCode = 1;
+  process.exitCode = exitCode;
 };
 
 export const h2Command = new Command("h2").description(
@@ -83,6 +80,7 @@ h2Command
   .command("run")
   .description("execute (or resume) a frozen plan against a topology")
   .option("--plan <path>", "frozen plan file")
+  .option("--golden <path>", "golden inventory the plan was frozen from (required)")
   .option("--resume <run_id>", "resume the plan of this run_id from --plans-dir")
   .requiredOption(
     "--topology <path>",
@@ -92,25 +90,49 @@ h2Command
   .option("--plans-dir <dir>", "where frozen plans live", "plans")
   .option("--ping-timeout-ms <n>", "swarm ping timeout", "10000")
   .option("--providers-timeout-ms <n>", "findprovs timeout", "30000")
+  .option(
+    "--allow-extra-generation",
+    "with --resume: permit one generation beyond max_block_generations for the block that hit it",
+  )
   .action(
     async (flags: {
       plan?: string;
       resume?: string;
+      golden?: string;
       topology: string;
       out: string;
       plansDir: string;
       pingTimeoutMs: string;
       providersTimeoutMs: string;
+      allowExtraGeneration?: boolean;
     }) => {
       let secrets: string[] = [];
+      const locks: { release(): void }[] = [];
       try {
+        if (flags.allowExtraGeneration && !flags.resume) {
+          throw new Error("--allow-extra-generation requires --resume");
+        }
         const pingTimeoutMs = positiveInt("--ping-timeout-ms", flags.pingTimeoutMs);
         const providersTimeoutMs = positiveInt("--providers-timeout-ms", flags.providersTimeoutMs);
-        const plan = await readPlan(resolveRunTarget(flags));
+        const planFile = resolveRunTarget(flags);
+        const goldenPath = flags.golden;
+        if (!goldenPath) throw new Error("--golden is required");
+        const plan = await readPlan(planFile);
+        const current = goldenDigest(await readGolden(goldenPath));
+        if (current !== plan.golden_sha256) {
+          throw new Error(
+            `plan golden_sha256 ${plan.golden_sha256} differs from the golden ${goldenPath} (${current})`,
+          );
+        }
         const topology = await loadTopology(flags.topology);
         secrets = secretsOf(topology);
         const mismatch = checkTopologyMatchesCampaign(topology, plan.campaign.replica_nodes);
         if (mismatch.length > 0) throw new Error(mismatch.join("; "));
+        for (const path of [resolve(flags.topology), flags.out]) {
+          const lock = acquireRunLock(path, (message) => console.error(message));
+          locks.push(lock);
+          process.once("exit", lock.release);
+        }
         const deps = realDeps(topology, { pingTimeoutMs, providersTimeoutMs });
         const result = await runPlan({
           plan,
@@ -118,10 +140,18 @@ h2Command
           deps,
           context: payloadContextOf(topology),
           expectedDeclared: expectedDeclaredOf(topology),
+          allowExtraGeneration: flags.allowExtraGeneration === true,
+          resume: flags.resume !== undefined,
+          log: (message) => console.error(redact(message, secrets)),
         });
         console.log(JSON.stringify({ run_id: plan.run_id, ...result }));
       } catch (error) {
-        fail("run", error, secrets);
+        fail("run", error, secrets, h2ExitCode(error));
+      } finally {
+        for (const lock of locks) {
+          lock.release();
+          process.off("exit", lock.release);
+        }
       }
     },
   );

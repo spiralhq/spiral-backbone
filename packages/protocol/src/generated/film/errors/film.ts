@@ -22,20 +22,40 @@ export const FILM_ERROR__INVALID_CID_PREFIX = 0x1776; // 6006
 export const FILM_ERROR__REPLICA_CAPACITY_EXCEEDED = 0x1777; // 6007
 /** InvalidReplicaIndex: Replica index is out of range */
 export const FILM_ERROR__INVALID_REPLICA_INDEX = 0x1778; // 6008
+/** InvalidPeerId: PeerID is not a 38-byte Ed25519 libp2p identity */
+export const FILM_ERROR__INVALID_PEER_ID = 0x1779; // 6009
+/** DuplicateReplica: PeerID already holds an active replica slot */
+export const FILM_ERROR__DUPLICATE_REPLICA = 0x177a; // 6010
+/** TitleTooLong: Title exceeds 160 bytes */
+export const FILM_ERROR__TITLE_TOO_LONG = 0x177b; // 6011
+/** CidPaddingNotZero: CID buffer must be zero after cid_len */
+export const FILM_ERROR__CID_PADDING_NOT_ZERO = 0x177c; // 6012
+/** ReplicaCountOverflow: Replica count overflowed */
+export const FILM_ERROR__REPLICA_COUNT_OVERFLOW = 0x177d; // 6013
 
 export type FilmError =
+  | typeof FILM_ERROR__CID_PADDING_NOT_ZERO
+  | typeof FILM_ERROR__DUPLICATE_REPLICA
   | typeof FILM_ERROR__INVALID_CID_LENGTH
   | typeof FILM_ERROR__INVALID_CID_PREFIX
+  | typeof FILM_ERROR__INVALID_PEER_ID
   | typeof FILM_ERROR__INVALID_REPLICA_INDEX
-  | typeof FILM_ERROR__REPLICA_CAPACITY_EXCEEDED;
+  | typeof FILM_ERROR__REPLICA_CAPACITY_EXCEEDED
+  | typeof FILM_ERROR__REPLICA_COUNT_OVERFLOW
+  | typeof FILM_ERROR__TITLE_TOO_LONG;
 
 let filmErrorMessages: Record<FilmError, string> | undefined;
 if (process.env["NODE_ENV"] !== "production") {
   filmErrorMessages = {
+    [FILM_ERROR__CID_PADDING_NOT_ZERO]: `CID buffer must be zero after cid_len`,
+    [FILM_ERROR__DUPLICATE_REPLICA]: `PeerID already holds an active replica slot`,
     [FILM_ERROR__INVALID_CID_LENGTH]: `CID is truncated or exceeds the Spiral Chunking Profile v1 length`,
     [FILM_ERROR__INVALID_CID_PREFIX]: `CID version/codec is outside the Spiral Chunking Profile v1`,
+    [FILM_ERROR__INVALID_PEER_ID]: `PeerID is not a 38-byte Ed25519 libp2p identity`,
     [FILM_ERROR__INVALID_REPLICA_INDEX]: `Replica index is out of range`,
     [FILM_ERROR__REPLICA_CAPACITY_EXCEEDED]: `Replica capacity (8) exceeded`,
+    [FILM_ERROR__REPLICA_COUNT_OVERFLOW]: `Replica count overflowed`,
+    [FILM_ERROR__TITLE_TOO_LONG]: `Title exceeds 160 bytes`,
   };
 }
 
@@ -55,5 +75,10 @@ export function isFilmError<TProgramErrorCode extends FilmError>(
   code?: TProgramErrorCode,
 ): error is SolanaError<typeof SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM> &
   Readonly<{ context: Readonly<{ code: TProgramErrorCode }> }> {
-  return isProgramError<TProgramErrorCode>(error, transactionMessage, FILM_PROGRAM_ADDRESS, code);
+  return isProgramError<TProgramErrorCode>(
+    error,
+    transactionMessage,
+    FILM_PROGRAM_ADDRESS,
+    code,
+  );
 }
