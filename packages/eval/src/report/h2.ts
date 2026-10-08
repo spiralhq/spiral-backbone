@@ -1,5 +1,9 @@
 import type { ResultRecord } from "@spiral-backbone/protocol";
 import { parseScenario, scenarioFor, validGenerations, type BlockRecord } from "../h2/blocks-log";
+import type { PlannedBlock } from "../h2/plan";
+import type { H2Evidence } from "./load";
+
+export type H2PlanBlock = Pick<PlannedBlock, "name" | "kind" | "active_replicas">;
 
 export const H2_RATE_HEADERS = [
   "replica_state",
@@ -9,13 +13,40 @@ export const H2_RATE_HEADERS = [
   "external_cache",
   "success_rate",
 ];
-export const H2_LATENCY_HEADERS = ["size_band", "method", "n", "mean_ms", "median_ms", "p95_ms"];
+export const H2_BY_REPLICAS_HEADERS = [
+  "active_replicas",
+  "method",
+  "attempts",
+  "successes",
+  "external_cache",
+  "success_rate",
+];
+export const H2_LATENCY_HEADERS = [
+  "block_kind",
+  "size_band",
+  "method",
+  "n",
+  "mean_ms",
+  "median_ms",
+  "p95_ms",
+];
 export const H2_FAILURE_HEADERS = ["replica_state", "method", "failure_class", "count"];
+export const H2_AUDIT_HEADERS = ["metric", "min", "median", "p95", "max"];
 
 const SIZE_BAND_ORDER = ["small", "medium", "large"];
+const KIND_ORDER = ["main", "cold-start", "degradation"];
 
 export interface H2Summary {
   rateRows: string[][];
+  byReplicaRows: string[][];
+  maxActiveReplicas: number;
+  threeReplicaAcceptance: {
+    activeReplicas: number;
+    successes: number;
+    denominator: number;
+    externalCache: number;
+    rate: number | null;
+  } | null;
   latencyRows: string[][];
   failureRows: string[][];
   included: number;
@@ -47,6 +78,40 @@ export function h2AttemptsLine(
     : `Attempts included: ${included} of ${planned} planned (${recorded} recorded, including re-run generations)\n`;
 }
 
+function rateOf(rows: ResultRecord[]) {
+  const cache = rows.filter((r) => r.failure_class === "external_cache").length;
+  const successes = rows.filter((r) => r.outcome === "success").length;
+  const denominator = rows.length - cache;
+  return {
+    cache,
+    successes,
+    denominator,
+    rate: denominator === 0 ? null : successes / denominator,
+  };
+}
+
+const percent = (rate: number | null) => (rate === null ? "—" : `${(rate * 100).toFixed(1)}%`);
+
+const rateCells = (rows: ResultRecord[]) => {
+  const { cache, successes, rate } = rateOf(rows);
+  return [String(rows.length), String(successes), String(cache), percent(rate)];
+};
+
+export function h2AcceptanceLine(
+  summary: Pick<H2Summary, "maxActiveReplicas" | "threeReplicaAcceptance">,
+): string {
+  const n = summary.maxActiveReplicas;
+  const subject = `**Success with ${n} active ${n === 1 ? "replica" : "replicas"}:`;
+  const a = summary.threeReplicaAcceptance;
+  if (a === null) return `${subject} no valid attempts — criterion ≥ 95%: no data**\n`;
+  const shown =
+    a.denominator === 0
+      ? "—"
+      : `${(Math.floor((a.successes * 10_000) / a.denominator) / 100).toFixed(2)}%`;
+  const verdict = a.rate === null ? "no data" : a.rate >= 0.95 ? "met" : "NOT met";
+  return `${subject} ${shown} (${a.successes} of ${a.denominator}, excluding ${a.externalCache} external_cache) — criterion ≥ 95%: ${verdict}**\n`;
+}
+
 const byKeys =
   <T>(keys: (item: T) => (number | string)[]) =>
   (a: T, b: T): number => {
@@ -59,13 +124,18 @@ export function summarizeH2(
   records: ResultRecord[],
   blocks: BlockRecord[],
   runId: string,
+  plan: H2PlanBlock[],
 ): H2Summary {
+  const kinds = new Map(plan.map((b) => [b.name, b.kind]));
+  const maxActiveReplicas = Math.max(...plan.map((b) => b.active_replicas.length));
   const own = records.filter((r) => r.run_id === runId);
   const runBlocks = blocks.filter((b) => b.run_id === runId);
   const valid = validGenerations(blocks, runId);
   const ended = new Set<string>();
   const planIndex = new Map<string, number>();
+  const activeCount = new Map<string, number>();
   for (const b of runBlocks) {
+    activeCount.set(b.block_name, b.intended_active.length);
     if (b.phase === "end") ended.add(scenarioFor(b.block_name, b.generation));
     planIndex.set(b.block_name, Math.min(planIndex.get(b.block_name) ?? Infinity, b.block_index));
   }
@@ -78,38 +148,62 @@ export function summarizeH2(
   );
   const blockOf = (r: ResultRecord) => parseScenario(r.scenario)!.block;
   const planOrder = (block: string) => planIndex.get(block) ?? Infinity;
+  const kindOf = (r: ResultRecord) => {
+    const kind = kinds.get(blockOf(r));
+    if (kind === undefined) throw new Error(`block ${blockOf(r)} is not in the frozen plan`);
+    return kind;
+  };
+  const activeOf = (r: ResultRecord) => activeCount.get(blockOf(r))!;
+  const planActive = new Map(plan.map((b) => [b.name, b.active_replicas.length]));
+  for (const r of included) {
+    kindOf(r);
+    if (activeOf(r) !== planActive.get(blockOf(r)))
+      throw new Error(
+        `block ${blockOf(r)}: block log has ${activeOf(r)} intended active replicas, frozen plan has ${planActive.get(blockOf(r))}`,
+      );
+  }
 
   const rateRows = [...groupBy(included, (r) => `${blockOf(r)}\u0000${r.method}`)]
-    .map(([key, rows]) => {
-      const [state, method] = key.split("\u0000") as [string, string];
-      const cache = rows.filter((r) => r.failure_class === "external_cache").length;
-      const successes = rows.filter((r) => r.outcome === "success").length;
-      const denominator = rows.length - cache;
-      const rate = denominator === 0 ? "—" : `${((successes / denominator) * 100).toFixed(1)}%`;
-      return [state, method, String(rows.length), String(successes), String(cache), rate];
-    })
+    .map(([key, rows]) => [...key.split("\u0000"), ...rateCells(rows)])
     .sort(byKeys((row) => [planOrder(row[0]!), row[1]!]));
+
+  const byReplicaRows = [...groupBy(included, (r) => `${activeOf(r)}\u0000${r.method}`)]
+    .map(([key, rows]) => [...key.split("\u0000"), ...rateCells(rows)])
+    .sort(byKeys((row) => [-Number(row[0]), row[1]!]));
+
+  const topRows = included.filter((r) => activeOf(r) === maxActiveReplicas);
+  const atTop = rateOf(topRows);
+  const threeReplicaAcceptance =
+    topRows.length === 0
+      ? null
+      : {
+          activeReplicas: maxActiveReplicas,
+          successes: atTop.successes,
+          denominator: atTop.denominator,
+          externalCache: atTop.cache,
+          rate: atTop.rate,
+        };
 
   const latencyRows = [
     ...groupBy(
       included.filter((r) => r.outcome === "success"),
-      (r) => `${r.size_band}\u0000${r.method}`,
+      (r) => `${kindOf(r)}\u0000${r.size_band}\u0000${r.method}`,
     ),
   ]
     .map(([key, rows]) => {
-      const [band, method] = key.split("\u0000") as [string, string];
       const values = rows.map((r) => r.latency_ms);
       const mean = Math.round(values.reduce((s, v) => s + v, 0) / values.length);
       return [
-        band,
-        method,
+        ...key.split("\u0000"),
         String(values.length),
         String(mean),
         String(percentile(values, 50)),
         String(percentile(values, 95)),
       ];
     })
-    .sort(byKeys((row) => [SIZE_BAND_ORDER.indexOf(row[0]!), row[1]!]));
+    .sort(
+      byKeys((row) => [KIND_ORDER.indexOf(row[0]!), SIZE_BAND_ORDER.indexOf(row[1]!), row[2]!]),
+    );
 
   const failureRows = [
     ...groupBy(
@@ -131,6 +225,9 @@ export function summarizeH2(
 
   return {
     rateRows,
+    byReplicaRows,
+    maxActiveReplicas,
+    threeReplicaAcceptance,
     latencyRows,
     failureRows,
     included: included.length,
@@ -138,5 +235,61 @@ export function summarizeH2(
     excludedNoEnd: own.length - included.length - excludedUnconfirmed,
     directSuccessAtZero,
     directCacheAtZero,
+  };
+}
+
+export function provenanceAudit(
+  records: ResultRecord[],
+  blocks: BlockRecord[],
+  runId: string,
+  evidence: H2Evidence[],
+): { n: number; missingEvidence: number; pctExcluded: number; rows: string[][] } {
+  const valid = validGenerations(blocks, runId);
+  const byKey = new Map(
+    evidence
+      .filter((e) => e.run_id === runId)
+      .map((e) => [`${e.attempt_id}#${e.generation}`, e.provenance]),
+  );
+  const audited = records.filter(
+    (r) =>
+      r.run_id === runId &&
+      valid.has(r.scenario) &&
+      r.method === "direct" &&
+      r.outcome === "success",
+  );
+  const found = audited.flatMap((r) => {
+    const { block, generation } = parseScenario(r.scenario)!;
+    const attemptId = `${block}/${r.work_id}/${r.method}/r${r.attempt}`;
+    const p = byKey.get(`${attemptId}#${generation}`);
+    if (p?.dag_size != null && p.dag_size <= 0)
+      throw new Error(
+        `evidence for ${attemptId} (generation ${generation}): dag_size is ≤ 0 on a direct success`,
+      );
+    return p ? [p] : [];
+  });
+  const bytes = found.map((p) => p.unattributed);
+  const pcts = found
+    .filter((p) => p.dag_size !== null)
+    .map((p) => Math.round((p.unattributed / p.dag_size!) * 10_000) / 100);
+  const stats = (values: number[], show: (v: number) => string) =>
+    values.length === 0
+      ? ["—", "—", "—", "—"]
+      : [
+          Math.min(...values),
+          percentile(values, 50),
+          percentile(values, 95),
+          Math.max(...values),
+        ].map(show);
+  return {
+    n: found.length,
+    missingEvidence: audited.length - found.length,
+    pctExcluded: found.length - pcts.length,
+    rows:
+      found.length === 0
+        ? []
+        : [
+            ["unattributed_bytes", ...stats(bytes, String)],
+            ["unattributed_pct_of_dag", ...stats(pcts, (v) => v.toFixed(2))],
+          ],
   };
 }

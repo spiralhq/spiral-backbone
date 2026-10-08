@@ -14,6 +14,20 @@ export const h3EvidenceSchema = z
   })
   .passthrough();
 
+export const h2EvidenceSchema = z
+  .object({
+    run_id: z.string(),
+    attempt_id: z.string(),
+    generation: z.number().int().positive(),
+    provenance: z
+      .object({ unattributed: z.number(), dag_size: z.number().nullable() })
+      .passthrough()
+      .nullable(),
+  })
+  .passthrough();
+
+export type H2Evidence = z.infer<typeof h2EvidenceSchema>;
+
 export const h4RunSchema = z
   .object({
     run_id: z.string(),
@@ -50,6 +64,10 @@ export async function loadResults(path: string): Promise<ResultRecord[]> {
 
 export async function loadH3Evidence(path: string): Promise<z.infer<typeof h3EvidenceSchema>[]> {
   return existsSync(path) ? readJsonLines(path, h3EvidenceSchema) : [];
+}
+
+export async function loadH2Evidence(path: string): Promise<H2Evidence[]> {
+  return existsSync(path) ? readJsonLines(path, h2EvidenceSchema) : [];
 }
 
 export function loadH4Run(path: string): z.infer<typeof h4RunSchema> | undefined {

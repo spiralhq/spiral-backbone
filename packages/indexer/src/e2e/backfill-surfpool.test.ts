@@ -65,6 +65,7 @@ if (skipReason) {
 
 describe.skipIf(skipReason !== undefined)("backfill on Surfpool (H4 in miniature)", () => {
   let surfnet: Awaited<ReturnType<typeof createSurfnetClient>>;
+  let drain: NodeJS.Timeout | undefined;
   let pg: PostgresContainer;
   let db: Database;
   let workDir: string;
@@ -72,6 +73,9 @@ describe.skipIf(skipReason !== undefined)("backfill on Surfpool (H4 in miniature
 
   beforeAll(async () => {
     surfnet = await createSurfnetClient();
+    // Undrained simnet events stall the surfnet after ~1000 slots; see docs/solana-kit-notes.md.
+    drain = setInterval(() => surfnet.surfnet.drainEvents(), 1_000);
+    drain.unref();
     surfnet.surfnet.deploy({
       programId: ORGANIZATION_PROGRAM_ADDRESS,
       soPath: join(SPIRAL_PROGRAMS_DEPLOY_DIR, "organization.so"),
@@ -105,6 +109,7 @@ describe.skipIf(skipReason !== undefined)("backfill on Surfpool (H4 in miniature
   }, 180_000);
 
   afterAll(async () => {
+    clearInterval(drain);
     if (surfnet) {
       try {
         surfnet.surfnet.stop();

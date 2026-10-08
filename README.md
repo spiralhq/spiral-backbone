@@ -6,6 +6,11 @@ Solana on-chain registration. This repository holds the indexing, verification, 
 evaluation tooling that runs off-chain; the on-chain programs live in a separate repo,
 [`spiralhq/spiral-programs`](https://github.com/spiralhq/spiral-programs).
 
+The evaluation tests four research hypotheses, H1–H4 (integrity, retrievability from the
+registry, submission authority, reconstructibility of the query layer). They are defined in
+[`docs/eval-harness.md`](docs/eval-harness.md), and the real campaign that runs them is in
+[`docs/campaign-runbook.md`](docs/campaign-runbook.md).
+
 This is a TypeScript monorepo managed with npm workspaces and Turborepo. Linting and
 formatting run on Oxlint/Oxfmt (no ESLint, no Prettier).
 

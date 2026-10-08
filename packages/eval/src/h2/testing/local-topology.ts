@@ -24,6 +24,7 @@ const PRIVATE_OVERLAY = [
 export interface LocalTopology {
   topology: Topology;
   replicaApiUrls: Record<string, string>;
+  gatewayHostUrl: string;
   networkNodeIp: string;
   networkName: string;
   stop(): Promise<void>;
@@ -159,9 +160,10 @@ export async function startLocalTopology(options: {
         "ipfs config --json Provide.Enabled false",
         "ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080",
       ],
-      [],
+      ["127.0.0.1::8080"],
     );
     const gatewayIp = await containerIp(gateway, networkName);
+    const gatewayHostUrl = `http://127.0.0.1:${await publishedPort(gateway, 8080)}`;
 
     const replicas: Topology["replicas"] = [];
     const replicaApiUrls: Record<string, string> = {};
@@ -268,7 +270,7 @@ export async function startLocalTopology(options: {
         repo_root: REPO_ROOT,
       },
     });
-    return { topology, replicaApiUrls, networkNodeIp, networkName, stop };
+    return { topology, replicaApiUrls, gatewayHostUrl, networkNodeIp, networkName, stop };
   } catch (error) {
     await stop();
     throw error;

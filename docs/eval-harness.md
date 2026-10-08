@@ -1,17 +1,31 @@
-# Evaluation harness (Phase 5: H1–H4, report)
+# Evaluation harness (H1–H4, report)
 
-`packages/eval` turns the hypotheses into commands. Each writes one NDJSON line per attempt, validated
+`packages/eval` turns the project's four research hypotheses into commands:
+
+- **H1 — integrity of the registered representation:** recomputing the CID of retrieved content
+  matches the CID registered on-chain, and a tampered copy never does.
+- **H2 — retrievability from the registry:** a fresh client that knows only the on-chain Film
+  account retrieves and validates every work from the declared replicas. Acceptance: at least 95%
+  success with all three replicas active, and recovery still operational with a single active
+  replica. Consulting the local index or any application service refutes it, and so does a direct
+  success with zero active replicas.
+- **H3 — submission authority:** the programs refuse every unauthorized registration on-chain,
+  each with its expected error code.
+- **H4 — reconstructibility of the query layer:** the off-chain catalog rebuilt from on-chain
+  account state alone matches the golden inventory field by field.
+
+Each command writes one NDJSON line per attempt, validated
 against the frozen schema in `packages/protocol/src/results.ts`, plus a sidecar for data the schema
 has no field for.
 
-| Command                                                                                   | Output                                                                                                 | Sidecar                                                                                      |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| `npm run eval:h1 -- --golden results/inventory-golden.ndjson`                             | `results/h1.ndjson`                                                                                    | `h1.evidence.ndjson` (tamper offset/bytes, mismatch diagnosis, retrieval errors)             |
-| `npm run eval:h2 -- plan --campaign … --golden …`                                         | `plans/h2-<run_id>.json` (frozen plan)                                                                 | —                                                                                            |
-| `npm run eval:h2 -- run --plan … --topology …` (or `--resume <run_id>`)                   | `results/h2.ndjson`, `results/h2-blocks.ndjson`                                                        | `h2.evidence.ndjson` (attempt_id, generation, provenance, gateway headers), `h2.runs.ndjson` |
-| `npm run eval:h3`                                                                         | `results/h3.ndjson`                                                                                    | `h3.evidence.ndjson` (observed code, instruction index, refusing program, full program logs) |
-| `npm run eval:h4 -- --golden results/inventory-golden.ndjson --database-url postgres://…` | `results/h4.ndjson`                                                                                    | `h4.run.json` (backfill report, counts, missing organizations, field diffs)                  |
-| `npm run eval:report`                                                                     | `results/report/report.md`, `h1.csv`, `h2-rates.csv`, `h2-latency.csv`, `h3.csv`, `h4-divergences.csv` | —                                                                                            |
+| Command                                                                                   | Output                                                                                                                                                  | Sidecar                                                                                      |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `npm run eval:h1 -- --golden results/inventory-golden.ndjson`                             | `results/h1.ndjson`                                                                                                                                     | `h1.evidence.ndjson` (tamper offset/bytes, mismatch diagnosis, retrieval errors)             |
+| `npm run eval:h2 -- plan --campaign … --golden …`                                         | `plans/h2-<run_id>.json` (frozen plan)                                                                                                                  | —                                                                                            |
+| `npm run eval:h2 -- run --plan … --topology …` (or `--resume <run_id>`)                   | `results/h2.ndjson`, `results/h2-blocks.ndjson`                                                                                                         | `h2.evidence.ndjson` (attempt_id, generation, provenance, gateway headers), `h2.runs.ndjson` |
+| `npm run eval:h3`                                                                         | `results/h3.ndjson`                                                                                                                                     | `h3.evidence.ndjson` (observed code, instruction index, refusing program, full program logs) |
+| `npm run eval:h4 -- --golden results/inventory-golden.ndjson --database-url postgres://…` | `results/h4.ndjson`                                                                                                                                     | `h4.run.json` (backfill report, counts, missing organizations, field diffs)                  |
+| `npm run eval:report`                                                                     | `results/report/report.md`, `h1.csv`, `h2-rates.csv`, `h2-by-replicas.csv`, `h2-latency.csv`, `h2-provenance-audit.csv`, `h3.csv`, `h4-divergences.csv` | —                                                                                            |
 
 `run_id` = `<ISO second>Z-<h1|h2|h3|h4>-<label>`. The report shows the latest run per hypothesis.
 
@@ -30,6 +44,9 @@ records say `failure`; invalid input, an unreadable golden, a harness fault or a
 exit 1. Harness faults and bad input never become result records: they abort the run or are
 refused up front.
 RPC endpoints are recorded as host only, never as the full URL.
+
+The real campaign — servers, program deploy, submit, the runs in order, daily archive and
+teardown — is in the [campaign runbook](campaign-runbook.md).
 
 ## The golden inventory
 
@@ -178,8 +195,8 @@ by several replicas. The evidence `provenance` records, for audit: the per-peer 
 `ledger_undeclared_total` and `unattributed` (`data_received` minus the ledger sum).
 
 **Known limitation:** if an undeclared peer sends a copy of a block that a declared replica also
-sent, bitswap cannot tell them apart. The only trace is a positive `unattributed`; check its
-distribution in a campaign.
+sent, bitswap cannot tell them apart. The only trace is a positive `unattributed`; the report's
+direct provenance audit shows its distribution (see [Report](#report)).
 
 ### Faults and resume
 
@@ -188,7 +205,9 @@ are:
 
 - executor exit 2, a refusal, or anything other than one valid output line;
 - inside the executor: a registry read error (RPC HTTP error, missing Film account), a local
-  filesystem error while writing the retrieved file, or a `bitswap stat` without a `Peers` key;
+  filesystem error while writing the retrieved file, or a `bitswap stat` without a `Peers` key.
+  Registry reads are retried up to 3 times (1 s, 2 s, 4 s) on 429, 5xx, network or timeout
+  errors before faulting; any other registry error faults at once;
 - an SSH failure or an unanswerable probe;
 - a gate that never confirms within `max_gate_attempts`;
 - a block that exceeds `max_block_generations`;
@@ -238,13 +257,20 @@ evidence that has no result.
 
 ### Report
 
-The report shows the latest H2 run:
+The report shows the latest H2 run. It reads that run's frozen plan from
+`--plans-dir <dir>/h2-<run_id>.json` (default `plans`) to learn each block's `kind` and the
+campaign's highest active replica count. The report fails with exit 1, with no fallback, on:
+
+- a missing file: `frozen plan <path> not found — pass --plans-dir`;
+- unreadable JSON, a schema mismatch or a plan without blocks:
+  `frozen plan <path> is invalid: <reason>`;
+- a plan of another run: `frozen plan <path> belongs to run <plan run_id>, not <run_id>`.
 
 - **Included attempts.** Only attempts whose generation's last `end` is confirmed are counted.
   The others are excluded and counted on two separate lines: one for an unconfirmed end
   (`end-of-block replica state not confirmed`), one for a crash before the end check
-  (`no end-of-block state check recorded`). The spec's "invalid" generations are the report's
-  "excluded" attempts.
+  (`no end-of-block state check recorded`). Attempts of invalid generations are
+  the report's "excluded" attempts.
 - **Attempts line.** The line reads
   `Attempts included: X of Y planned (Z recorded, including re-run generations)`. Y is the plan's
   attempt count. Z counts every record of the run, including records of invalid generations.
@@ -253,6 +279,18 @@ The report shows the latest H2 run:
   `recorded_attempts` of the `completed` marker. R includes re-run generations, so it can exceed Y
   (e.g. `complete (8/6)`). On an unfinished run it prints `**INCOMPLETE**` with the included count
   of Y (`X of Y expected attempts included`).
+- **Acceptance line.** Right after the attempts line:
+  `**Success with N active replicas: X% (S of D, excluding E external_cache) — criterion ≥ 95%: met|NOT met**`
+  ("replica" when N = 1). N is the highest `active_replicas` count in the frozen plan, never a
+  count inferred from the attempts that happened to be valid. The line combines both methods and
+  every block with N active replicas (e.g. `main`, `cold-start` and `replicas=3`), counting each
+  block's attempts from its valid generations only. `external_cache` stays outside the denominator
+  D. X has two decimals and is truncated, not rounded, so it cannot contradict the verdict at the boundary (`94.99%` for 18999 of 19999). When D = 0 the
+  verdict is `no data`. When no valid attempt has N active replicas (e.g. every such generation
+  was unconfirmed), the line reads
+  `**Success with N active replicas: no valid attempts — criterion ≥ 95%: no data**`; it never
+  falls back to a lower count. The line states the observation; the exit code does not depend on
+  it.
 - **Refutation line.** `**Direct success with zero active replicas: N** — this refutes H2.` It
   appears only when an included `direct` attempt succeeded in a zero-replica block.
 - **Contaminated control line.** The report prints:
@@ -271,10 +309,14 @@ The report shows the latest H2 run:
 - **Rate table (`h2-rates.csv`).** One row per `replica_state` × method, in plan order.
   `replica_state` is the block name. `external_cache` has its own column and is left out of the
   denominator of `success_rate`. Blocks that share an active replica set (e.g. `main`,
-  `cold-start` and `replicas=3`) stay separate rows; combine them by hand if needed.
-- **Latency table (`h2-latency.csv`).** Successful attempts per size band × method.
+  `cold-start` and `replicas=3`) stay separate rows here.
+- **By active replicas (`h2-by-replicas.csv`).** Under `### By active replicas`: one row per
+  active replica count × method, highest count first, with the same columns and rate formula as
+  the rate table. Blocks with the same count are combined.
+- **Latency table (`h2-latency.csv`).** Successful attempts per block kind (`main`, `cold-start`,
+  `degradation`, from the frozen plan) × size band × method.
   `latency_ms` covers the whole attempt, including:
-  - the registry RPC read;
+  - the registry RPC read, including retries (`registry_attempts` in the evidence marks them);
   - for `direct`: `initFreshNode`, daemon startup and the provenance queries;
   - the CID recomputation.
 - **Cold vs warm.** Neither table separates cold works from warm ones: nothing in the report reads
@@ -282,6 +324,30 @@ The report shows the latest H2 run:
   `works: "cold"` / `"warm"`, or join the records against the golden inventory's `cold_cid`.
 - **Failure table.** Keyed by `replica_state`, method and `failure_class`. It is markdown only,
   with no CSV.
+- **Direct provenance audit (`h2-provenance-audit.csv`).** Under `### Direct provenance audit`,
+  after the failure table. The population is the included `direct` successes. Each is joined to
+  the run's lines of `h2.evidence.ndjson` (same `run_id`; the sidecar holds every run) on
+  `(attempt_id, generation)`, taking the last line per key. The table gives
+  min, median, p95 and max (nearest rank) of `unattributed_bytes` and of
+  `unattributed_pct_of_dag` (`unattributed / dag_size × 100`, two decimals; a null `dag_size`
+  leaves that attempt out of the pct row only, and the report then prints
+  `Percent row excludes K direct successes without dag_size`). The sign is kept.
+  `Direct successes audited: N` counts the joined successes.
+  - **Reading it.** This is the check for the known provenance limitation above. Values near zero
+    mean the ledgers explain every byte received. A negative value means the ledgers counted more
+    than `DataReceived`, which is harmless. A large positive value means more bytes arrived than
+    the ledgers explain; an undeclared peer may have sent duplicate blocks. Those successes deserve
+    a manual look at their evidence `peers` rows before the success rate is trusted.
+  - **Missing evidence.** A direct success with no evidence line, or with `provenance: null`, is an
+    artifact inconsistency. The report prints
+    `**Direct successes without provenance evidence: N**` and leaves it out of the table.
+  - An evidence line that is not valid JSON, lacks `run_id`, `attempt_id`,
+    `provenance.unattributed` or `provenance.dag_size`, or whose `generation` is not a positive
+    integer, fails the report. So does a joined direct success with `dag_size` 0:
+    `evidence for <attempt_id> (generation N): dag_size is 0 on a direct success`.
+- **Plan consistency.** The report fails if an included attempt's block has a different
+  `intended_active` count in the block log than `active_replicas` in the frozen plan:
+  `block <name>: block log has X intended active replicas, frozen plan has Y`.
 
 ### Dry run
 
@@ -299,18 +365,24 @@ chain:
 
 The chain must drain its events (see [the embedded Surfpool stall](solana-kit-notes.md#testing-against-surfpool)).
 
-### Phase 6
+### Real campaign
 
-- **Campaign.** The campaign composition (200/60/120 attempts) is the researcher's decision,
-  written as a campaign spec like `h2-dry-run.json`.
-- **Timing.** On the public DHT, set `stabilization_ms` to minutes, not seconds. The recommended
-  timeout is `{ "base_ms": 60000, "per_mb_ms": 1000 }` (`timeout` is required in the spec).
+The operator sequence is in the [campaign runbook](campaign-runbook.md); this section only lists
+what H2 itself requires.
+
+- **Campaign.** The campaign composition is the researcher's decision, written as a campaign
+  spec: `packages/eval/campaigns/h2-final.json`.
+- **Timing.** On the public DHT, a gate needs minutes in total, not seconds, for provider records
+  to propagate after a restart. `h2-final.json` gets them from repeated short gates:
+  `stabilization_ms: 30000` × up to `max_gate_attempts: 20` bounds each gate at about 10 minutes,
+  while a gate whose state confirms early costs only 30 s. The timeout is
+  `{ "base_ms": 60000, "per_mb_ms": 1000 }` (`timeout` is required in the spec).
 - **Topology.** Start from `packages/eval/campaigns/topology.example.json`; replace the `<…>`,
   `.example` and PeerID values.
   - `replicas` must equal the active replicas declared on every Film in the golden. A mismatch
     faults on the first attempt.
-  - Reach the probe VPS's Kubo API through an SSH tunnel (`ssh -L 15001:127.0.0.1:5001 probe`),
-    which gives `network_node.api_url` = `http://127.0.0.1:15001`.
+  - The network node is a Kubo container on the orchestrator with its API published on
+    `127.0.0.1:15001`, which gives `network_node.api_url` = `http://127.0.0.1:15001` (runbook §3).
   - `bootstrap_multiaddr: null` means the public DHT, and `swarm_key_path: null` means the public
     network.
   - Set `block_cidrs` to the submission machine's address.
@@ -351,8 +423,8 @@ Because the organizations are created per run, **every H3 run needs a fresh `--l
 one fails with "already in use". The default label is a base-36 timestamp, so omitting `--label`
 is the simplest choice.
 
-Scenario 7 on Devnet cannot write arbitrary bytes into a System-owned account the way the Phase 1
-litesvm test does. It passes a real Film account instead: an account with data, owned by another
+Scenario 7 on Devnet cannot write arbitrary bytes into a System-owned account the way the litesvm
+test in `spiral-programs` (`programs/film/tests/h3_scenarios.rs`) does. It passes a real Film account instead: an account with data, owned by another
 program, which yields the same owner-check failure.
 
 ## H4
@@ -373,21 +445,15 @@ permissions) is an infrastructure failure: no result records are written
 
 ## Devnet acceptance (manual — researcher)
 
-The programs are not deployed on Devnet (checked 2026-10-02). In `spiral-programs`:
-
-1. Back up `keys/organization-keypair.json` and `keys/film-keypair.json` outside the repo (see
-   `keys/README.md`). Losing them makes the program addresses unrecoverable.
-2. `solana config set --url devnet`, then fund the deployer (`solana airdrop`, or the web faucet).
-3. `anchor deploy --provider.cluster devnet` and `anchor idl init` for both programs.
-4. Create `keys/bootstrap-payer-keypair.json`, fund it, then run `npx tsx scripts/bootstrap-devnet.ts`.
-
-Then, in `spiral-backbone`, with a dedicated endpoint:
+Deploy the programs first: [campaign runbook §1](campaign-runbook.md#1-devnet-programs) (key
+backup, deploy, IDL metadata, payer, and why pre-flight checks the deployed bytecode against your
+local build). Then, in `spiral-backbone`, with a dedicated endpoint:
 
 ```bash
 export SPIRAL_RPC_URL=https://<dedicated devnet endpoint>
 # one Kubo node reachable at http://127.0.0.1:5001 (e.g. infra/kubo or a container)
 npm run spiral -- org create --slug spiral-eval --name "Spiral Eval" --cluster devnet --rpc-url "$SPIRAL_RPC_URL"
-npm run spiral -- submit --org spiral-eval --work-id pd-001 --file dataset/files/DuckandC1951.mp4 \
+npm run spiral --silent -- submit --org spiral-eval --work-id pd-001 --file dataset/files/DuckandC1951.mp4 \
   --title "Duck and Cover" --replicas http://127.0.0.1:5001 --cluster devnet --rpc-url "$SPIRAL_RPC_URL" \
   >> results/inventory-golden.ndjson
 npm run eval:h1 -- --golden results/inventory-golden.ndjson --label devnet
@@ -396,8 +462,10 @@ npm run eval:h4 -- --golden results/inventory-golden.ndjson --database-url postg
 npm run eval:report
 ```
 
-Acceptance:
+`--silent` keeps npm's `> spiral` banner out of stdout, and so out of the golden file.
 
-- criterion 1: all three commands complete and their NDJSON is valid;
-- criterion 2: `report.md` shows the seven H3 codes;
-- criterion 5: the report renders.
+It passes when:
+
+- all three commands complete and their NDJSON is valid;
+- `report.md` shows the seven H3 codes;
+- the report renders.

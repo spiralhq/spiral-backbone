@@ -1,6 +1,6 @@
 # @solana/kit implementation notes
 
-Gotchas discovered while building `packages/protocol` and `packages/cli` (Phase 3) that
+Gotchas discovered while building `packages/protocol` and `packages/cli` that
 aren't obvious from Kit's own docs. Referenced from a few source comments; kept here instead
 of repeated inline.
 
@@ -31,7 +31,7 @@ a client to get a real `KeyPairSigner`.
 Resolves to a `SuccessfulSingleTransactionPlanResult`, not a bare signature string —
 `{ context, kind, planType, plannedMessage, status }`. The signature is at
 `.context.signature`. `${result}` silently stringifies to `"[object Object]"`, which passed
-type-checking undetected until a real send in Task 9's e2e test caught it.
+type-checking undetected until a real send in the CLI's end-to-end test caught it.
 
 ## Event-CPI accounts aren't auto-defaulted
 

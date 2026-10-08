@@ -3,14 +3,19 @@ import { join } from "node:path";
 import type { ResultRecord } from "@spiral-backbone/protocol";
 import { sidecarPath } from "../common/sidecar";
 import { blocksPath, readBlockRecords } from "../h2/blocks-log";
+import { planPath, readPlan, type FrozenPlan } from "../h2/plan";
 import {
+  H2_AUDIT_HEADERS,
+  H2_BY_REPLICAS_HEADERS,
   H2_FAILURE_HEADERS,
   H2_LATENCY_HEADERS,
   H2_RATE_HEADERS,
+  h2AcceptanceLine,
   h2AttemptsLine,
+  provenanceAudit,
   summarizeH2,
 } from "./h2";
-import { loadH3Evidence, loadH4Run, loadResults, loadRunStatus } from "./load";
+import { loadH2Evidence, loadH3Evidence, loadH4Run, loadResults, loadRunStatus } from "./load";
 import { csv, markdownTable } from "./render";
 import {
   H1_HEADERS,
@@ -30,12 +35,29 @@ export function latestRunId(records: ResultRecord[]): string | undefined {
     .at(-1);
 }
 
+async function loadH2Plan(plansDir: string, runId: string): Promise<FrozenPlan> {
+  const path = planPath(plansDir, runId);
+  let plan: FrozenPlan;
+  try {
+    plan = await readPlan(path);
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT")
+      throw new Error(`frozen plan ${path} not found — pass --plans-dir`, { cause });
+    throw new Error(`frozen plan ${path} is invalid: ${(cause as Error).message}`, { cause });
+  }
+  if (plan.blocks.length === 0) throw new Error(`frozen plan ${path} is invalid: no blocks`);
+  if (plan.run_id !== runId)
+    throw new Error(`frozen plan ${path} belongs to run ${plan.run_id}, not ${runId}`);
+  return plan;
+}
+
 const onlyRun = (records: ResultRecord[], runId: string | undefined) =>
   records.filter((r) => r.run_id === runId);
 
 export async function generateReport(options: {
   resultsDir: string;
   outDir: string;
+  plansDir?: string;
   runIds?: { h1?: string; h2?: string; h3?: string; h4?: string };
 }): Promise<{ markdownPath: string; csvPaths: string[] }> {
   await mkdir(options.outDir, { recursive: true });
@@ -71,7 +93,19 @@ export async function generateReport(options: {
   parts.push(`## H2 — Recuperabilidade a partir do registro\n`);
   if (h2All.length === 0) parts.push("No results.\n");
   else {
-    const summary = summarizeH2(h2All, await readBlockRecords(blocksPath(h2Path)), h2Run!);
+    const blockLog = await readBlockRecords(blocksPath(h2Path));
+    const summary = summarizeH2(
+      h2All,
+      blockLog,
+      h2Run!,
+      (await loadH2Plan(options.plansDir ?? "plans", h2Run!)).blocks,
+    );
+    const audit = provenanceAudit(
+      h2All,
+      blockLog,
+      h2Run!,
+      await loadH2Evidence(sidecarPath(h2Path, "evidence")),
+    );
     const marks = await loadRunStatus(sidecarPath(h2Path, "runs"));
     const started = marks.find((m) => m.run_id === h2Run && m.status === "started");
     const planned = started?.status === "started" ? started.expected_attempts : undefined;
@@ -80,6 +114,7 @@ export async function generateReport(options: {
       statusLine(marks, h2Run!, summary.included, "included"),
       h2AttemptsLine(summary.included, planned, onlyRun(h2All, h2Run).length),
     );
+    parts.push(h2AcceptanceLine(summary));
     if (summary.excludedUnconfirmed > 0)
       parts.push(
         `Attempts excluded (end-of-block replica state not confirmed): ${summary.excludedUnconfirmed}\n`,
@@ -100,17 +135,33 @@ export async function generateReport(options: {
     }
     parts.push(
       markdownTable(H2_RATE_HEADERS, summary.rateRows),
-      "\n",
+      "\n### By active replicas\n",
+      markdownTable(H2_BY_REPLICAS_HEADERS, summary.byReplicaRows),
+      "\n### Latency\n",
       summary.latencyRows.length === 0
         ? "No successful attempts.\n"
         : markdownTable(H2_LATENCY_HEADERS, summary.latencyRows),
-      "\n",
+      "\n### Failures\n",
       summary.failureRows.length === 0
         ? "No failures.\n"
         : markdownTable(H2_FAILURE_HEADERS, summary.failureRows),
+      "\n### Direct provenance audit\n",
+    );
+    if (audit.missingEvidence > 0)
+      parts.push(`**Direct successes without provenance evidence: ${audit.missingEvidence}**\n`);
+    parts.push(
+      `Direct successes audited: ${audit.n}\n`,
+      ...(audit.pctExcluded > 0
+        ? [`Percent row excludes ${audit.pctExcluded} direct successes without dag_size\n`]
+        : []),
+      audit.rows.length === 0
+        ? "No direct successes with provenance evidence.\n"
+        : markdownTable(H2_AUDIT_HEADERS, audit.rows),
     );
     await emitCsv("h2-rates.csv", H2_RATE_HEADERS, summary.rateRows);
+    await emitCsv("h2-by-replicas.csv", H2_BY_REPLICAS_HEADERS, summary.byReplicaRows);
     await emitCsv("h2-latency.csv", H2_LATENCY_HEADERS, summary.latencyRows);
+    await emitCsv("h2-provenance-audit.csv", H2_AUDIT_HEADERS, audit.rows);
   }
 
   const h3Path = join(options.resultsDir, "h3.ndjson");

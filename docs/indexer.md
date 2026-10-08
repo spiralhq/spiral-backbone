@@ -15,8 +15,8 @@ migrations are applied if needed and the four catalog tables are replaced in one
 `DATABASE_URL` at a shared database.
 
 stdout is one JSON line (`BackfillReport`): row counts, `rpc_calls` per method (a retried call
-counts once), `rate_limit_retries` (HTTP 429s absorbed by backoff — counted apart so Phase 5 can
-tell RPC throttling from a recovery failure), `duration_ms`, and the endpoint as `rpc_endpoint`
+counts once), `rate_limit_retries` (HTTP 429s absorbed by backoff — counted apart so the evaluation harness
+can tell RPC throttling from a recovery failure), `duration_ms`, and the endpoint as `rpc_endpoint`
 (host only) + `rpc_endpoint_fingerprint` (`sha256:` of the full URL, first 12 hex). The full URL
 is never printed: Helius and QuickNode embed the API key in it. `--rpc-url` must be `http(s)`.
 
@@ -39,7 +39,8 @@ The three `getProgramAccounts` listings run sequentially at different slots, so 
 mid-run could produce an inconsistent snapshot; run backfill against a quiescent chain for H4
 measurements.
 
-No transaction history, no events (ADR-03) — `src/no-history.test.ts` enforces it. An account
+No transaction history, no events: the catalog is rebuilt from current account state alone,
+which is what H4 tests — `src/no-history.test.ts` enforces it. An account
 that matches a discriminator but cannot be decoded, has out-of-range lengths, or has a
 `schemaVersion` other than 1 (organizations and films; memberships have none) aborts the run with
 its address: skipping it would hide a missing record from H4.
@@ -47,7 +48,7 @@ its address: skipping it would hide a missing record from H4.
 ## Schema notes
 
 - Columns mirror the generated account types exactly (e.g. `Organization` has no `film_count`,
-  despite the early design doc). The only local column is `indexed_at`, never compared.
+  even though one was once planned). The only local column is `indexed_at`, never compared.
 - `films.cid` stores exactly `cid_len` bytes; base32 is derived at query time with
   `bytesToCidString` from `@spiral-backbone/protocol`.
 - `film_replicas` has one row per slot `< replica_count`, deactivated replicas included.
@@ -65,8 +66,7 @@ sequence would silently produce an empty database.
 
 ## `follow` mode: cut
 
-The optional `logsSubscribe` mode was cut for schedule (Phase 4 acceptance criterion 3). No
-hypothesis depends on it. The `sync_cursor` table exists (slot + signature) so that adding it
+The optional `logsSubscribe` mode was cut for schedule. No hypothesis depends on it. The `sync_cursor` table exists (slot + signature) so that adding it
 later needs no migration, but nothing writes to it today.
 
 ## Tests

@@ -56,6 +56,7 @@ if (skipReason) {
 
 describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end)", () => {
   let surfnet: Awaited<ReturnType<typeof createSurfnetClient>>;
+  let drain: NodeJS.Timeout | undefined;
   let kubo: KuboContainer;
   let workDir: string;
   let keypairPath: string;
@@ -64,6 +65,9 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
 
   beforeAll(async () => {
     surfnet = await createSurfnetClient();
+    // Undrained simnet events stall the surfnet after ~1000 slots; see docs/solana-kit-notes.md.
+    drain = setInterval(() => surfnet.surfnet.drainEvents(), 1_000);
+    drain.unref();
 
     surfnet.surfnet.deploy({
       programId: "2JWb4r1LgykRNocsxVgfhysLtFtgjWvMRzceBDX79WCw",
@@ -94,6 +98,7 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
   }, 60_000);
 
   afterAll(async () => {
+    clearInterval(drain);
     if (surfnet) {
       try {
         surfnet.surfnet.stop();
@@ -224,7 +229,7 @@ describe.skipIf(skipReason !== undefined)("submit -> fetch -> verify (end-to-end
   }, 60_000);
 
   it("rejects a submitter with no active Membership before building a transaction", async () => {
-    // Acceptance criterion 7. Dedicated org so this test stays independent of execution order.
+    // Dedicated org so this test stays independent of execution order.
     const strangerSlug = `e2e-stranger-${Date.now()}`;
     await create.parseAsync(
       [

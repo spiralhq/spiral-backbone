@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "notice": "PLACEHOLDERS ONLY. The entries below exist to prove scripts/validate-manifest.ts works end to end; they are not the evaluation sample. Selecting the 20 works (7 small / 8 medium / 5 large) and confirming each one's public-domain status individually is the researcher's curatorial decision, completed before Phase 6 and checked with `node scripts/validate-manifest.ts --final`.",
+  "notice": "PLACEHOLDERS ONLY. The entries below exist to prove scripts/validate-manifest.ts works end to end; they are not the evaluation sample. Selecting the 20 works (7 small / 8 medium / 5 large) and confirming each one's public-domain status individually is the researcher's curatorial decision, completed before the evaluation campaign and checked with `node scripts/validate-manifest.ts --final`.",
   "works": [
     {
       "work_id": "pd-001",

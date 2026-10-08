@@ -17,6 +17,8 @@
     "eval:h3": "tsx packages/eval/src/cli.ts h3",
     "eval:h4": "tsx packages/eval/src/cli.ts h4",
     "eval:report": "tsx packages/eval/src/cli.ts report",
+    "campaign:archive-day": "node scripts/archive-day.ts",
+    "campaign:preflight": "tsx packages/eval/src/cli.ts campaign preflight",
     "db:push": "turbo run db:push -F @spiral-backbone/db --",
     "db:studio": "turbo run db:studio -F @spiral-backbone/db --",
     "db:generate": "turbo run db:generate -F @spiral-backbone/db --",

@@ -61,3 +61,7 @@ dataset/files/
 
 # Evaluation outputs (see docs/eval-harness.md)
 results/
+plans/
+
+# Daily campaign snapshots (see docs/campaign-runbook.md)
+archive/

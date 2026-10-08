@@ -50,7 +50,7 @@ export function peerIdToBytes(peerId: string): Uint8Array {
     ED25519_IDENTITY_HEADER.some((byte, i) => bytes[i] !== byte)
   ) {
     throw new Error(
-      `peer ID ${peerId} is not an Ed25519 identity multihash (ADR-04 requires 38 bytes starting 00 24 08 01 12 20)`,
+      `peer ID ${peerId} is not an Ed25519 identity multihash (the on-chain replica slot holds exactly 38 bytes starting 00 24 08 01 12 20)`,
     );
   }
   return bytes;

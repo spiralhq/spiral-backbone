@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ResultRecord } from "@spiral-backbone/protocol";
 import { describe, expect, it } from "vitest";
+import { frozenPlanSchema, planPath } from "../h2/plan";
 import { csv, markdownTable } from "./render";
 import { generateReport, latestRunId } from "./run";
 
@@ -33,6 +34,44 @@ function rec(o: Partial<ResultRecord>): ResultRecord {
 }
 
 const lines = (values: unknown[]) => `${values.map((v) => JSON.stringify(v)).join("\n")}\n`;
+
+function writeH2Plan(
+  runId: string,
+  blocks: { name: string; kind: "main" | "cold-start" | "degradation"; active: string[] }[],
+): string {
+  const plansDir = mkdtempSync(join(tmpdir(), "report-plans-"));
+  const plan = frozenPlanSchema.parse({
+    plan_version: 1,
+    run_id: runId,
+    created_at: "2026-10-06T12:00:00.000Z",
+    golden_sha256: "0".repeat(64),
+    campaign: {
+      campaign_version: 1,
+      replica_nodes: ["r1", "r2", "r3"],
+      stabilization_ms: 0,
+      max_gate_attempts: 1,
+      max_block_generations: 1,
+      timeout: { base_ms: 1, per_mb_ms: 0 },
+      blocks: blocks.map((b) => ({
+        name: b.name,
+        kind: b.kind,
+        active_replicas: b.active,
+        methods: ["direct"],
+        works: "all",
+        repetitions: 1,
+      })),
+    },
+    blocks: blocks.map((b, i) => ({
+      block_index: i,
+      name: b.name,
+      kind: b.kind,
+      active_replicas: b.active,
+      attempts: [],
+    })),
+  });
+  writeFileSync(planPath(plansDir, runId), JSON.stringify(plan));
+  return plansDir;
+}
 
 describe("render", () => {
   it("renders markdown tables and quoted CSV", () => {
@@ -173,6 +212,27 @@ describe("H2 section", () => {
       ]),
     );
     writeFileSync(join(results, "h2-blocks.ndjson"), lines([block(1, false), block(2, true)]));
+    const provenance = (unattributed: number) => ({
+      peers: [],
+      data_received: 700158 + unattributed,
+      dup_data_received: 0,
+      dag_size: 700158,
+      ledger_declared_total: 700158,
+      ledger_undeclared_total: 0,
+      unattributed,
+    });
+    const evidence = (generation: number, unattributed: number) => ({
+      run_id: run,
+      attempt_id: "replicas=1/pd-001/direct/r1",
+      scenario: `replicas=1@g${generation}`,
+      generation,
+      block_index: 0,
+      provenance: provenance(unattributed),
+    });
+    writeFileSync(
+      join(results, "h2.evidence.ndjson"),
+      lines([evidence(1, 50_000), evidence(2, 7), evidence(2, 158)]),
+    );
     writeFileSync(
       join(results, "h2.runs.ndjson"),
       lines([
@@ -180,9 +240,30 @@ describe("H2 section", () => {
         { run_id: run, status: "completed", recorded_attempts: 2, finished_at: "t" },
       ]),
     );
-    const { markdownPath, csvPaths } = await generateReport({ resultsDir: results, outDir: out });
+    const plansDir = writeH2Plan(run, [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+    ]);
+    const { markdownPath, csvPaths } = await generateReport({
+      resultsDir: results,
+      outDir: out,
+      plansDir,
+    });
     const md = readFileSync(markdownPath, "utf8");
     expect(md).toContain("## H2");
+    expect(md).toContain(
+      "**Success with 1 active replica: 100.00% (1 of 1, excluding 0 external_cache) — criterion ≥ 95%: met**\n",
+    );
+    expect(md).toContain("### By active replicas");
+    expect(md).toContain("| active_replicas |");
+    expect(md).toContain("| 1 | direct | 1 | 1 | 0 | 100.0% |");
+    expect(md).toContain("| block_kind |");
+    expect(md).toContain("| degradation | small | direct | 1 | 400 | 400 | 400 |");
+    expect(readFileSync(join(out, "h2-by-replicas.csv"), "utf8")).toBe(
+      "active_replicas,method,attempts,successes,external_cache,success_rate\n1,direct,1,1,0,100.0%\n",
+    );
+    expect(readFileSync(join(out, "h2-latency.csv"), "utf8").split("\n")[0]).toBe(
+      "block_kind,size_band,method,n,mean_ms,median_ms,p95_ms",
+    );
     expect(md).toContain("| replicas=1 | direct | 1 | 1 | 0 | 100.0% |");
     expect(md).toContain(
       "Status: complete (2/1 attempts)\n\nAttempts included: 1 of 1 planned (2 recorded, including re-run generations)\n",
@@ -190,10 +271,194 @@ describe("H2 section", () => {
     expect(md).toContain("Attempts excluded (end-of-block replica state not confirmed): 1");
     expect(md).not.toContain("no end-of-block state check recorded");
     expect(md).not.toContain("this refutes H2");
+    expect(md).toContain(
+      "### Failures\n\nNo failures.\n\n\n### Direct provenance audit\n\nDirect successes audited: 1\n\n| metric | min | median | p95 | max |\n|---|---|---|---|---|\n| unattributed_bytes | 158 | 158 | 158 | 158 |\n| unattributed_pct_of_dag | 0.02 | 0.02 | 0.02 | 0.02 |\n",
+    );
+    expect(md).not.toContain("without provenance evidence");
+    expect(md).not.toContain("Percent row excludes");
+    expect(readFileSync(join(out, "h2-provenance-audit.csv"), "utf8")).toBe(
+      "metric,min,median,p95,max\nunattributed_bytes,158,158,158,158\nunattributed_pct_of_dag,0.02,0.02,0.02,0.02\n",
+    );
     expect(csvPaths.map((p) => p.split("/").pop()).sort()).toEqual([
+      "h2-by-replicas.csv",
       "h2-latency.csv",
+      "h2-provenance-audit.csv",
       "h2-rates.csv",
     ]);
+  });
+
+  const auditRun = "2026-10-06T12:00:00Z-h2-audit";
+  const auditReport = async (evidence: string) => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    const out = mkdtempSync(join(tmpdir(), "report-out-"));
+    const h2 = (work: string) =>
+      rec({
+        run_id: auditRun,
+        hypothesis: "H2",
+        scenario: "main@g1",
+        method: "direct",
+        work_id: work,
+      });
+    writeFileSync(join(results, "h2.ndjson"), lines([h2("pd-001"), h2("pd-002")]));
+    writeFileSync(
+      join(results, "h2-blocks.ndjson"),
+      lines([
+        {
+          run_id: auditRun,
+          block_index: 0,
+          block_name: "main",
+          generation: 1,
+          phase: "end",
+          check_number: 1,
+          intended_active: ["r1"],
+          observed: [],
+          missing_providers: {},
+          confirmed: true,
+          reasons: [],
+          at: "t",
+        },
+      ]),
+    );
+    writeFileSync(join(results, "h2.evidence.ndjson"), evidence);
+    const plansDir = writeH2Plan(auditRun, [{ name: "main", kind: "main", active: ["r1"] }]);
+    const { markdownPath } = await generateReport({ resultsDir: results, outDir: out, plansDir });
+    return { md: readFileSync(markdownPath, "utf8"), out };
+  };
+
+  it("makes direct successes without provenance evidence visible", async () => {
+    const { md, out } = await auditReport(
+      lines([
+        {
+          run_id: auditRun,
+          attempt_id: "main/pd-001/direct/r1",
+          generation: 1,
+          provenance: { unattributed: -40, dag_size: null },
+        },
+        {
+          run_id: "2026-10-05T12:00:00Z-h2-old",
+          attempt_id: "main/pd-002/direct/r1",
+          generation: 1,
+          provenance: { unattributed: 5, dag_size: 100 },
+        },
+      ]),
+    );
+    expect(md).toContain(
+      "### Direct provenance audit\n\n**Direct successes without provenance evidence: 1**\n\nDirect successes audited: 1\n\nPercent row excludes 1 direct successes without dag_size\n\n| metric |",
+    );
+    expect(md).toContain("| unattributed_bytes | -40 | -40 | -40 | -40 |");
+    expect(md).toContain("| unattributed_pct_of_dag | — | — | — | — |");
+    expect(readFileSync(join(out, "h2-provenance-audit.csv"), "utf8")).toBe(
+      "metric,min,median,p95,max\nunattributed_bytes,-40,-40,-40,-40\nunattributed_pct_of_dag,—,—,—,—\n",
+    );
+  });
+
+  it("states when no direct success has provenance evidence", async () => {
+    const { md, out } = await auditReport("");
+    expect(md).toContain(
+      "### Direct provenance audit\n\n**Direct successes without provenance evidence: 2**\n\nDirect successes audited: 0\n\nNo direct successes with provenance evidence.\n",
+    );
+    expect(readFileSync(join(out, "h2-provenance-audit.csv"), "utf8")).toBe(
+      "metric,min,median,p95,max\n",
+    );
+  });
+
+  it("fails on an evidence line that does not match the schema", async () => {
+    await expect(
+      auditReport(
+        lines([
+          { run_id: auditRun, attempt_id: "main/pd-001/direct/r1", generation: 1, provenance: {} },
+        ]),
+      ),
+    ).rejects.toThrow(/h2\.evidence\.ndjson:1: provenance\.unattributed/);
+  });
+
+  it("fails on an evidence line without run_id or with a non-positive generation", async () => {
+    const provenance = { unattributed: 0, dag_size: 100 };
+    await expect(
+      auditReport(lines([{ attempt_id: "main/pd-001/direct/r1", generation: 1, provenance }])),
+    ).rejects.toThrow(/h2\.evidence\.ndjson:1: run_id/);
+    await expect(
+      auditReport(
+        lines([
+          { run_id: auditRun, attempt_id: "main/pd-001/direct/r1", generation: 0, provenance },
+        ]),
+      ),
+    ).rejects.toThrow(/h2\.evidence\.ndjson:1: generation/);
+    await expect(
+      auditReport(
+        lines([
+          { run_id: auditRun, attempt_id: "main/pd-001/direct/r1", generation: 1.5, provenance },
+        ]),
+      ),
+    ).rejects.toThrow(/h2\.evidence\.ndjson:1: generation/);
+  });
+
+  const h2Only = (run: string) => {
+    const results = mkdtempSync(join(tmpdir(), "report-in-"));
+    writeFileSync(
+      join(results, "h2.ndjson"),
+      lines([rec({ run_id: run, hypothesis: "H2", scenario: "replicas=1@g1", method: "direct" })]),
+    );
+    return results;
+  };
+
+  it("fails without the run's frozen plan", async () => {
+    const run = "2026-10-06T12:00:00Z-h2-noplan";
+    const plansDir = mkdtempSync(join(tmpdir(), "report-plans-"));
+    await expect(
+      generateReport({
+        resultsDir: h2Only(run),
+        outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+        plansDir,
+      }),
+    ).rejects.toThrow(/frozen plan .* not found — pass --plans-dir/);
+  });
+
+  it("fails on an unparseable frozen plan", async () => {
+    const run = "2026-10-06T12:00:00Z-h2-badplan";
+    const plansDir = mkdtempSync(join(tmpdir(), "report-plans-"));
+    writeFileSync(planPath(plansDir, run), "{ not json");
+    await expect(
+      generateReport({
+        resultsDir: h2Only(run),
+        outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+        plansDir,
+      }),
+    ).rejects.toThrow(new RegExp(`^frozen plan ${planPath(plansDir, run)} is invalid: .*JSON`));
+  });
+
+  it("fails on a frozen plan without blocks", async () => {
+    const run = "2026-10-06T12:00:00Z-h2-empty";
+    const plansDir = writeH2Plan(run, [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+    ]);
+    const path = planPath(plansDir, run);
+    writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), blocks: [] }));
+    await expect(
+      generateReport({
+        resultsDir: h2Only(run),
+        outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+        plansDir,
+      }),
+    ).rejects.toThrow(`frozen plan ${path} is invalid: no blocks`);
+  });
+
+  it("fails on a frozen plan that belongs to another run", async () => {
+    const run = "2026-10-06T12:00:00Z-h2-other";
+    const plansDir = writeH2Plan("2026-10-06T12:00:00Z-h2-x", [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+    ]);
+    writeFileSync(
+      planPath(plansDir, run),
+      readFileSync(planPath(plansDir, "2026-10-06T12:00:00Z-h2-x")),
+    );
+    await expect(
+      generateReport({
+        resultsDir: h2Only(run),
+        outDir: mkdtempSync(join(tmpdir(), "report-out-")),
+        plansDir,
+      }),
+    ).rejects.toThrow(/belongs to run 2026-10-06T12:00:00Z-h2-x/);
   });
 });
 
@@ -224,7 +489,11 @@ describe("H2 flags", () => {
       lines([block("replicas=1", 0, ["r1"]), block("replicas=0", 1, [])]),
     );
     writeFileSync(join(results, "h2.runs.ndjson"), lines(marks));
-    const { markdownPath } = await generateReport({ resultsDir: results, outDir: out });
+    const plansDir = writeH2Plan(run, [
+      { name: "replicas=1", kind: "degradation", active: ["r1"] },
+      { name: "replicas=0", kind: "degradation", active: [] },
+    ]);
+    const { markdownPath } = await generateReport({ resultsDir: results, outDir: out, plansDir });
     return readFileSync(markdownPath, "utf8");
   };
   const started = { run_id: run, status: "started", expected_attempts: 3, started_at: "t" };

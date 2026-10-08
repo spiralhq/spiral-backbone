@@ -9,7 +9,8 @@ import { readJsonLines } from "../common/ndjson";
 import { runStatusSchema } from "../common/run-status";
 import { sidecarPath } from "../common/sidecar";
 import { generateReport } from "../report/run";
-import { summarizeH2 } from "../report/h2";
+import { provenanceAudit, summarizeH2 } from "../report/h2";
+import { loadH2Evidence } from "../report/load";
 import { shouldSkipE2e, startLocalChain, type LocalChain } from "../testing/chain";
 import { createOrg, submitForTest } from "../testing/submit";
 import { blocksPath, readBlockRecords } from "./blocks-log";
@@ -17,7 +18,7 @@ import { loadCampaign, type CampaignSpec } from "./campaign";
 import { expectedDeclaredOf, payloadContextOf, realDeps } from "./deps";
 import { buildExecutorImage } from "./executor/image";
 import { runPlan, type OrchestratorDeps } from "./orchestrator";
-import { generatePlan } from "./plan";
+import { generatePlan, planPath, writePlan } from "./plan";
 import { sshReplicaController } from "./state";
 import { HOST_GATEWAY_ADD_HOST, startRpcRelay } from "./testing/rpc-relay";
 import { startLocalTopology, type LocalTopology } from "./testing/local-topology";
@@ -51,6 +52,7 @@ const evidenceSchema = z
     provenance: provenanceSchema.nullable(),
     gateway_status: z.number().int().nullable(),
     gateway_headers: z.record(z.string(), z.string()),
+    registry_attempts: z.number().int().positive(),
   })
   .strict();
 
@@ -194,9 +196,12 @@ describe.skipIf(skip)("eval:h2 reduced-scale dry run", () => {
     const marks = await readJsonLines(sidecarPath(outPath, "runs"), runStatusSchema);
     expect(marks.map((m) => m.status)).toEqual(["started", "completed"]);
 
+    const plansDir = join(outDir, "plans");
+    await writePlan(planPath(plansDir, plan.run_id), plan);
     const { markdownPath } = await generateReport({
       resultsDir: outDir,
       outDir: join(outDir, "report"),
+      plansDir,
     });
     const md = readFileSync(markdownPath, "utf8");
     expect(md).toContain("## H2");
@@ -207,8 +212,36 @@ describe.skipIf(skip)("eval:h2 reduced-scale dry run", () => {
     expect(md).not.toContain("Attempts excluded");
     expect(md).toContain("| replicas=1 | direct | 2 | 2 | 0 | 100.0% |");
     expect(md).toContain("| replicas=0 | gateway | external_cache | 1 |");
+    expect(md).toContain(
+      "**Success with 3 active replicas: 100.00% (6 of 6, excluding 0 external_cache) — criterion ≥ 95%: met**",
+    );
+    expect(md).toContain("| 3 | direct | 5 | 5 | 0 | 100.0% |");
+    expect(md).toContain("| 3 | gateway | 1 | 1 | 0 | 100.0% |");
+    expect(md).toContain("| 0 | gateway | 2 | 0 | 1 | 0.0% |");
+    for (const kind of ["main", "cold-start", "degradation"])
+      expect(md).toMatch(new RegExp(`\\| ${kind} \\| small \\| direct \\|`));
     expect(md).not.toContain("refutes H2");
     expect(md).not.toContain("Zero-replica control contaminated");
+
+    const directSuccesses = records.filter(
+      (r) => r.method === "direct" && r.outcome === "success",
+    ).length;
+    expect(directSuccesses).toBeGreaterThan(0);
+    const audit = provenanceAudit(
+      records,
+      log,
+      plan.run_id,
+      await loadH2Evidence(sidecarPath(outPath, "evidence")),
+    );
+    expect(audit).toMatchObject({ n: directSuccesses, missingEvidence: 0 });
+    expect(audit.rows.map((r) => r[0])).toEqual(["unattributed_bytes", "unattributed_pct_of_dag"]);
+    expect(md).toContain("### Direct provenance audit");
+    expect(md).toContain(`Direct successes audited: ${directSuccesses}\n`);
+    expect(md).toContain("| metric | min | median | p95 | max |");
+    expect(md).not.toContain("without provenance evidence");
+    expect(readFileSync(join(outDir, "report", "h2-provenance-audit.csv"), "utf8")).toMatch(
+      /^metric,min,median,p95,max\nunattributed_bytes,(-?\d+,){3}-?\d+\nunattributed_pct_of_dag,/,
+    );
   }, 1_800_000);
 
   it("resumes an interrupted run without repeating attempts", async () => {
@@ -305,9 +338,10 @@ describe.skipIf(skip)("eval:h2 reduced-scale dry run", () => {
     ]);
     const records = await readJsonLines(outPath, resultRecordSchema);
     expect(records.map((r) => r.scenario)).toEqual(["main@g1", "main@g1", "main@g2", "main@g2"]);
-    const summary = summarizeH2(records, blocks, plan.run_id);
+    const summary = summarizeH2(records, blocks, plan.run_id, plan.blocks);
     expect(summary.excludedUnconfirmed).toBe(2);
     expect(summary.excludedNoEnd).toBe(0);
     expect(summary.included).toBe(2);
+    expect(summary.byReplicaRows.map((r) => r.slice(0, 3))).toEqual([["3", "direct", "2"]]);
   }, 900_000);
 });

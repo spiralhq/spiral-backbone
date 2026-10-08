@@ -18,16 +18,21 @@ export function resolveRunTarget(flags: {
   return flags.plan ?? planPath(flags.plansDir, flags.resume!);
 }
 
-export function secretsOf(topology: Topology): string[] {
-  const urls = [topology.rpc_url, topology.gateway_url, topology.network_node.api_url];
+export function secretsOfUrls(urls: string[], extra: string[] = []): string[] {
   const parts = urls.flatMap((u) => {
     const url = new URL(u);
     const tail = url.pathname + url.search;
     return [u, url.href, url.origin, url.host, url.search, ...(tail !== "/" ? [tail] : [])];
   });
-  if (topology.network_node.bootstrap_multiaddr)
-    parts.push(topology.network_node.bootstrap_multiaddr);
+  parts.push(...extra);
   return [...new Set(parts.filter((p) => p.length > 0))].sort((a, b) => b.length - a.length);
+}
+
+export function secretsOf(topology: Topology): string[] {
+  return secretsOfUrls(
+    [topology.rpc_url, topology.gateway_url, topology.network_node.api_url],
+    topology.network_node.bootstrap_multiaddr ? [topology.network_node.bootstrap_multiaddr] : [],
+  );
 }
 
 export function redact(message: string, secrets: string[]): string {

@@ -11,6 +11,7 @@ import { attemptPayloadSchema, EXECUTOR_EXIT } from "./attempt";
 import { fetchViaGateway } from "./gateway";
 import { catToFile, initFreshNode, provenance, startDaemon } from "./local-node";
 import { peerIdFromBytes, type Provenance } from "./provenance";
+import { readFilm } from "./registry";
 import { classifyCatError, verdict, type Retrieval } from "./verdict";
 
 async function main(): Promise<number> {
@@ -29,7 +30,11 @@ async function main(): Promise<number> {
   let gatewayStatus: number | null = null;
   let gatewayHeaders: Record<string, string> = {};
 
-  const film = (await fetchFilm(createSolanaRpc(payload.rpc_url), address(payload.film_pda))).data;
+  const rpc = createSolanaRpc(payload.rpc_url);
+  const registry = await readFilm((abortSignal) =>
+    fetchFilm(rpc, address(payload.film_pda), { abortSignal }),
+  );
+  const film = registry.value.data;
   const cidExpected = bytesToCidString(new Uint8Array(film.cid), film.cidLen);
   const declared = film.replicas
     .slice(0, film.replicaCount)
@@ -110,6 +115,7 @@ async function main(): Promise<number> {
     provenance: provenanceRows,
     gateway_status: gatewayStatus,
     gateway_headers: gatewayHeaders,
+    registry_attempts: registry.attempts,
   };
   process.stdout.write(`${toJsonLine({ record, evidence })}\n`);
   return 0;

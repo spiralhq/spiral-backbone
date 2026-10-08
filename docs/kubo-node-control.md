@@ -30,8 +30,8 @@ the daemon, because a config that only parses is not proof the node runs.
 
 ## Control agent (`scripts/kubo-node-control.ts`)
 
-The exact surface a later phase's remote H2 degradation-test orchestrator
-drives: `startService`/`shutdownService`/`checkStatus`, all taking an
+The exact surface the remote H2 degradation-test orchestrator
+(`packages/eval/src/h2/`) drives: `startService`/`shutdownService`/`checkStatus`, all taking an
 `SshTarget` (`host`, `port`, `user`, `identityFile`).
 
 Every command runs over SSH with `BatchMode=yes` (fail immediately on
@@ -70,3 +70,9 @@ port-forwarding false-positive `checkSwarmReachable`'s grace window exists
 to catch. Routing each connection through a per-connection `cat` process
 keeps it genuinely open, so the test can actually tell "up" apart from
 "down."
+
+The fixture image also copies the real `ipfs` binary from
+`ipfs/kubo:v0.43.1` (not run as a service), so `remoteKuboVersion` — which
+runs `ipfs version --number` over the same SSH path and is what the
+campaign pre-flight `replica <name>` check compares against `0.43.1` — is
+tested against an actual Kubo build.

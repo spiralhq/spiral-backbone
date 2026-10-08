@@ -4,6 +4,8 @@ RUN apt-get update \
   && apt-get install -y systemd systemd-sysv openssh-server ncat sudo \
   && rm -rf /var/lib/apt/lists/*
 
+COPY --from=ipfs/kubo:v0.43.1 /usr/local/bin/ipfs /usr/local/bin/ipfs
+
 RUN mkdir -p /run/sshd \
   && useradd -m -s /bin/bash spiral \
   && echo "spiral ALL=(ALL) NOPASSWD: /usr/bin/systemctl" > /etc/sudoers.d/spiral \

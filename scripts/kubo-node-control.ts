@@ -57,6 +57,10 @@ export async function assertSshReachable(target: SshTarget): Promise<void> {
   }
 }
 
+export async function remoteKuboVersion(target: SshTarget): Promise<string> {
+  return runSsh(target, "ipfs version --number");
+}
+
 export async function startService(target: SshTarget, serviceName = "ipfs"): Promise<void> {
   await runSsh(target, `sudo systemctl start ${serviceName}`);
 }

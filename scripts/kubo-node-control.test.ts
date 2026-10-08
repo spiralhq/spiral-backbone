@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   assertSshReachable,
   checkStatus,
+  remoteKuboVersion,
   shutdownService,
   startService,
   type NodeStatus,
@@ -83,6 +84,11 @@ describe("kubo-node-control (SSH end-to-end via Docker)", () => {
   it("asserts SSH reachability, and rejects for a closed port", async () => {
     await expect(assertSshReachable(target)).resolves.toBeUndefined();
     await expect(assertSshReachable({ ...target, port: 1 })).rejects.toThrow(/SSH to .*:1 failed/);
+  }, 30_000);
+
+  it("reads the remote Kubo version over SSH", async () => {
+    await expect(remoteKuboVersion(target)).resolves.toBe("0.43.1");
+    await expect(remoteKuboVersion({ ...target, port: 1 })).rejects.toThrow();
   }, 30_000);
 
   it("starts the service back up and both checks flip to true again", async () => {

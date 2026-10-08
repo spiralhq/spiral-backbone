@@ -31,7 +31,8 @@ Público (MEC). `source` in the manifest is restricted to these four.
 4. `npm run validate:manifest` — checks schema, band, duplicates and, for downloaded files,
    size and sha256.
 
-Before Phase 6, `node scripts/validate-manifest.ts --final` must pass: exactly 20 works, 7/8/5
+Before the evaluation campaign ([campaign runbook](../docs/campaign-runbook.md)),
+`node scripts/validate-manifest.ts --final` must pass: exactly 20 works, 7/8/5
 per band, no `placeholder: true`.
 
 ## Cold CIDs

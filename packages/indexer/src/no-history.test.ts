@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const FORBIDDEN = /\b(getSignaturesForAddress|getTransaction|getBlock|logsSubscribe)\b/;
 
-describe("ADR-03: backfill never reads transaction history or events", () => {
+describe("backfill never reads transaction history or events", () => {
   it("no indexer source file calls a history or subscription method", () => {
     const sources = globSync("**/*.ts", { cwd: import.meta.dirname }).filter(
       (file) => !file.endsWith(".test.ts") && !file.startsWith("e2e/"),

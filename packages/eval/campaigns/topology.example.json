@@ -47,6 +47,6 @@
     "add_hosts": [],
     "swarm_key_path": null,
     "block_cidrs": ["<submission machine IP>/32"],
-    "repo_root": "/path/to/spiral-backbone"
+    "repo_root": "/home/spiral/spiral-backbone"
   }
 }

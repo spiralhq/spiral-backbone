@@ -1,0 +1,58 @@
+{
+  "campaign_version": 1,
+  "replica_nodes": ["a", "b", "c"],
+  "stabilization_ms": 30000,
+  "max_gate_attempts": 20,
+  "max_block_generations": 3,
+  "timeout": { "base_ms": 60000, "per_mb_ms": 1000 },
+  "blocks": [
+    {
+      "name": "main",
+      "kind": "main",
+      "active_replicas": ["a", "b", "c"],
+      "methods": ["direct", "gateway"],
+      "works": "warm",
+      "repetitions": 7
+    },
+    {
+      "name": "cold-start",
+      "kind": "cold-start",
+      "active_replicas": ["a", "b", "c"],
+      "methods": ["direct"],
+      "works": "all",
+      "repetitions": 3
+    },
+    {
+      "name": "replicas=3",
+      "kind": "degradation",
+      "active_replicas": ["a", "b", "c"],
+      "methods": ["direct"],
+      "works": "all",
+      "repetitions": 1
+    },
+    {
+      "name": "replicas=2",
+      "kind": "degradation",
+      "active_replicas": ["a", "b"],
+      "methods": ["direct"],
+      "works": "all",
+      "repetitions": 1
+    },
+    {
+      "name": "replicas=1",
+      "kind": "degradation",
+      "active_replicas": ["a"],
+      "methods": ["direct"],
+      "works": "all",
+      "repetitions": 1
+    },
+    {
+      "name": "replicas=0",
+      "kind": "degradation",
+      "active_replicas": [],
+      "methods": ["direct", "gateway"],
+      "works": "all",
+      "repetitions": 1
+    }
+  ]
+}
