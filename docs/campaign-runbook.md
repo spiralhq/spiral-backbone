@@ -414,9 +414,9 @@ latest run per hypothesis, and H2 dry runs would append to `results/h2.ndjson`. 
 
 On the workstation, following `dataset/README.md`:
 
-1. Replace the placeholders in `dataset/manifest.json` with the 20 real works: 7 small, 8 medium,
-   5 large, exactly 5 with `"cold_cid": true`, each with its public-domain basis.
-2. Download every file into `dataset/files/` and run:
+1. `dataset/manifest.json` lists the 20 works: 7 small, 8 medium, 5 large, exactly 5 with
+   `"cold_cid": true`, each with its public-domain basis.
+2. Download every file into `dataset/files/` (the loop in `dataset/README.md`) and run:
 
    ```bash
    npm run validate:manifest -- --final

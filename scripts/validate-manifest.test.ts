@@ -1,6 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  truncateSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -144,15 +151,15 @@ describe("validateManifest", () => {
 describe("committed dataset/manifest.json", () => {
   const manifestPath = join(import.meta.dirname, "..", "dataset", "manifest.json");
 
-  it("is valid (non-final) and only contains placeholders for now", async () => {
+  it("is the final 20-work sample with no placeholders", async () => {
     const raw = JSON.parse(readFileSync(manifestPath, "utf8"));
     const { errors } = await validateManifest(raw, {
-      filesDir: join(import.meta.dirname, "..", "dataset", "files"),
-      final: false,
+      filesDir: mkdtempSync(join(tmpdir(), "manifest-nofiles-")),
+      final: true,
     });
     expect(errors).toEqual([]);
-    expect(raw.works.length).toBeGreaterThanOrEqual(1);
-    expect(raw.works.every((w: { placeholder: boolean }) => w.placeholder)).toBe(true);
+    expect(raw.works).toHaveLength(20);
+    expect(raw.works.some((w: { placeholder: boolean }) => w.placeholder)).toBe(false);
   });
 });
 
@@ -177,10 +184,12 @@ describe("validate-manifest CLI", () => {
     expect(result.stderr).toContain("as JSON");
   });
 
-  it("exits 0 on the committed manifest", () => {
-    const result = run(script, ["--manifest", join(root, "dataset", "manifest.json")]);
+  it("exits 0 on the committed manifest with --final", () => {
+    const copy = join(mkdtempSync(join(tmpdir(), "manifest-cli-")), "manifest.json");
+    copyFileSync(join(root, "dataset", "manifest.json"), copy);
+    const result = run(script, ["--manifest", copy, "--final"]);
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("Manifest valid");
+    expect(result.stdout).toContain("Manifest valid (final)");
   });
 
   it("still runs when invoked through a symlink", () => {

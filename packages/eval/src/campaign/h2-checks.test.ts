@@ -40,7 +40,7 @@ function write(name: string, content: string): string {
 }
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
-const PLACEHOLDER_MANIFEST = join(REPO, "dataset", "manifest.json");
+const COMMITTED_MANIFEST = join(REPO, "dataset", "manifest.json");
 const FINAL_CAMPAIGN = join(REPO, "packages", "eval", "campaigns", "h2-final.json");
 
 const GOLDEN = goldenFixtures20();
@@ -107,11 +107,14 @@ describe("manifestFinalCheck", () => {
     );
   });
 
-  it("blocks the committed placeholder manifest with the first validator error", async () => {
-    const raw: unknown = JSON.parse(readFileSync(PLACEHOLDER_MANIFEST, "utf8"));
+  it("blocks a partial placeholder manifest with the first validator error", async () => {
+    const committed = JSON.parse(readFileSync(COMMITTED_MANIFEST, "utf8"));
+    const works = committed.works.slice(0, 2).map((w: object) => ({ ...w, placeholder: true }));
+    const placeholder = write("placeholder.json", JSON.stringify({ ...committed, works }));
+    const raw: unknown = JSON.parse(readFileSync(placeholder, "utf8"));
     const { errors } = await validateManifest(raw, { filesDir, final: true });
     expect(errors.length).toBeGreaterThan(0);
-    const message = await failure(manifestFinalCheck(PLACEHOLDER_MANIFEST, filesDir));
+    const message = await failure(manifestFinalCheck(placeholder, filesDir));
     expect(message).toContain(errors[0]);
     expect(message).toContain(`${errors.length} errors`);
   });

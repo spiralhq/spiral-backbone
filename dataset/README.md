@@ -1,8 +1,17 @@
 # dataset
 
 `manifest.json` describes the public-domain audiovisual works every hypothesis (H1–H4) uses as
-its sample. **The two entries committed today are placeholders** that prove the validator works;
-the 20-work selection is the researcher's curatorial decision (see `notice` in the manifest).
+its sample: 20 works from 1897 to 1928, each taken from an Internet Archive item that carries a
+public-domain mark or dedication for the whole file. Public-domain status is asserted under U.S.
+law; several works remain protected in jurisdictions that count the term from the author's death.
+
+To fetch every file into `dataset/files/` and check it:
+
+```bash
+node -e 'for (const w of require("./dataset/manifest.json").works) console.log(`${w.file_url}\t${w.file_name}`)' |
+  while IFS=$'\t' read -r url name; do curl -fL --retry 5 -o "dataset/files/$name" "$url"; done
+node scripts/validate-manifest.ts --final
+```
 
 ## Stratification
 

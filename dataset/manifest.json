@@ -1,46 +1,406 @@
 {
   "manifest_version": 1,
-  "notice": "PLACEHOLDERS ONLY. The entries below exist to prove scripts/validate-manifest.ts works end to end; they are not the evaluation sample. Selecting the 20 works (7 small / 8 medium / 5 large) and confirming each one's public-domain status individually is the researcher's curatorial decision, completed before the evaluation campaign and checked with `node scripts/validate-manifest.ts --final`.",
+  "notice": "Evaluation sample: 20 public-domain audiovisual works from 1897 to 1928, all from Internet Archive items that carry a public-domain mark or dedication for the whole file. Public-domain status is asserted under U.S. law; several works remain protected in jurisdictions that count the term from the author's death. Files are kept out of git; download each file_url into dataset/files/<file_name> and check it with `node scripts/validate-manifest.ts --final`. Works with cold_cid must never be requested through a public gateway before the zero-replica leg of H2.",
   "works": [
     {
       "work_id": "pd-001",
-      "title": "Duck and Cover",
-      "source": "Prelinger Archives",
-      "url": "https://archive.org/details/DuckandC1951",
-      "file_url": "https://archive.org/download/DuckandC1951/DuckandC1951.mp4",
-      "file_name": "DuckandC1951.mp4",
+      "title": "Gugusse et l'Automate",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/gugusse-et-l-automate-1897.webm.-1080p.vp-9",
+      "file_url": "https://archive.org/download/gugusse-et-l-automate-1897.webm.-1080p.vp-9/Gugusse_et_l%27Automate_-_1897.webm.1080p.vp9.webm",
+      "file_name": "gugusse-et-l-automate-1897.webm.-1080p.vp-9_Gugusse_et_l_Automate_-_1897.webm.1080p.vp9.webm",
       "license": {
         "status": "public_domain",
-        "basis": "1951 civil-defense film produced by Archer Productions for the U.S. Federal Civil Defense Administration; catalogued as public domain in the Prelinger Archives (licenseurl creativecommons.org/licenses/publicdomain).",
-        "reference_url": "https://archive.org/details/DuckandC1951"
+        "basis": "1897 film by Georges Méliès (Star Film), France, published in 1897. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/gugusse-et-l-automate-1897.webm.-1080p.vp-9"
       },
-      "resolution": "640x480",
-      "duration_seconds": 554.95,
-      "size_bytes": 57591076,
+      "resolution": "1440x1080",
+      "duration_seconds": 55.08,
+      "size_bytes": 20956534,
       "size_band": "small",
       "cold_cid": false,
-      "sha256": "4ba23cfc250d9471a7f73aef6000313977e4a16df6ecff4d2eca46ed61f710ed",
-      "placeholder": true
+      "sha256": "3c54e06bed100d1fd3ed4a8fe5bbe8f73bea49a03efe8d92ee9416202de77df8",
+      "placeholder": false
     },
     {
       "work_id": "pd-002",
-      "title": "The General",
+      "title": "A Trip to the Moon (Le Voyage dans la Lune)",
       "source": "Internet Archive",
-      "url": "https://archive.org/details/TheGeneral1926",
-      "file_url": "https://archive.org/download/TheGeneral1926/The_General_1926_720p_512kb.mp4",
-      "file_name": "The_General_1926_720p_512kb.mp4",
+      "url": "https://archive.org/details/a-trip-to-the-moon-le-voyage-dans-la-lune-1902",
+      "file_url": "https://archive.org/download/a-trip-to-the-moon-le-voyage-dans-la-lune-1902/A%20Trip%20to%20the%20moon%20%28Le%20voyage%20dans%20la%20lune%29%20%281902%29.mp4",
+      "file_name": "a-trip-to-the-moon-le-voyage-dans-la-lune-1902_A_Trip_to_the_moon_Le_voyage_dans_la_lune_1902_.mp4",
       "license": {
         "status": "public_domain",
-        "basis": "Released in 1926 (Buster Keaton / United Artists); U.S. copyright term for 1926 works expired on 2022-01-01. Item carries the Public Domain Mark 1.0 on the Internet Archive.",
-        "reference_url": "https://archive.org/details/TheGeneral1926"
+        "basis": "1902 film by Georges Méliès (Star Film), France, published in 1902. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/a-trip-to-the-moon-le-voyage-dans-la-lune-1902"
+      },
+      "resolution": "480x360",
+      "duration_seconds": 761.52,
+      "size_bytes": 51306229,
+      "size_band": "small",
+      "cold_cid": false,
+      "sha256": "2c12c9533afca5300d702e7776b437b4c842801cc7d36066eda08720305b6418",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-003",
+      "title": "The Great Train Robbery",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/TheGreatTrainRobbery1903_201307",
+      "file_url": "https://archive.org/download/TheGreatTrainRobbery1903_201307/The%20Great%20Train%20Robbery%20%281903%29.mp4",
+      "file_name": "TheGreatTrainRobbery1903_201307_The_Great_Train_Robbery_1903_.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1903 film by Edwin S. Porter (Edison Manufacturing Company), United States, published in 1903. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/TheGreatTrainRobbery1903_201307"
       },
       "resolution": "320x240",
-      "duration_seconds": 4732.31,
-      "size_bytes": 419224226,
+      "duration_seconds": 690.12,
+      "size_bytes": 25430996,
+      "size_band": "small",
+      "cold_cid": false,
+      "sha256": "cc45cd39718c5dc5d5fd54087107b69effd2ba6f45a041777616b08c4b0c2720",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-004",
+      "title": "The Cameraman's Revenge",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/TheCameramansRevenge",
+      "file_url": "https://archive.org/download/TheCameramansRevenge/TheCameramansRevenge_512kb.mp4",
+      "file_name": "TheCameramansRevenge_TheCameramansRevenge_512kb.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1912 film by Władysław Starewicz (Khanzhonkov), Russian Empire, published in 1912. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries a CC0 1.0 public-domain dedication for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/TheCameramansRevenge"
+      },
+      "resolution": "320x240",
+      "duration_seconds": 767.83,
+      "size_bytes": 61834143,
+      "size_band": "small",
+      "cold_cid": true,
+      "sha256": "e4b7d3f0b199befb2ad9396b17445ad2f6f9b64ce6957fdab218cdbd68195c32",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-005",
+      "title": "Gertie the Dinosaur",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/gertiethe-dinosaur-512kb",
+      "file_url": "https://archive.org/download/gertiethe-dinosaur-512kb/GertietheDinosaur_512kb.mp4",
+      "file_name": "gertiethe-dinosaur-512kb_GertietheDinosaur_512kb.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1914 film by Winsor McCay, United States, published in 1914. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/gertiethe-dinosaur-512kb"
+      },
+      "resolution": "320x240",
+      "duration_seconds": 738.57,
+      "size_bytes": 53611973,
+      "size_band": "small",
+      "cold_cid": false,
+      "sha256": "9473f4243dad01f1104a2afb233879b5d30c1481ccb71cacfbba426c76c1a1a2",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-006",
+      "title": "The Immigrant",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/charlie-chaplin-.-the-immigrant-1917-restored-silent-short-film-noir-comedy",
+      "file_url": "https://archive.org/download/charlie-chaplin-.-the-immigrant-1917-restored-silent-short-film-noir-comedy/Charlie%20Chaplin%20.%20The%20Immigrant%20%281917%20Restored%20Silent%20Short%20Film%20Noir%20Comedy%29.mp4",
+      "file_name": "charlie-chaplin-.-the-immigrant-1917-restored-silent-short-film-noir-comedy_Charlie_Chaplin_._The_Immigrant_1917_Restored_Silent_Short_Film_Noir_Comedy_.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1917 film by Charlie Chaplin (Mutual Film Corporation), United States, published in 1917. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/charlie-chaplin-.-the-immigrant-1917-restored-silent-short-film-noir-comedy"
+      },
+      "resolution": "480x360",
+      "duration_seconds": 1471.05,
+      "size_bytes": 84658595,
+      "size_band": "small",
+      "cold_cid": false,
+      "sha256": "f6ff04faa2727db14bdc0f9f6f7601437863e23a3f705caabf15977974aa7993",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-007",
+      "title": "Feline Follies",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/FelixTheCat-FelineFollies1919",
+      "file_url": "https://archive.org/download/FelixTheCat-FelineFollies1919/FelixTheCat-1919-FelineFollies.mpg",
+      "file_name": "FelixTheCat-FelineFollies1919_FelixTheCat-1919-FelineFollies.mpg",
+      "license": {
+        "status": "public_domain",
+        "basis": "1919 film by Pat Sullivan Studio / Otto Messmer (Paramount Screen Magazine), United States, published in 1919. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries a Creative Commons public-domain dedication for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/FelixTheCat-FelineFollies1919"
+      },
+      "resolution": "321x240",
+      "duration_seconds": 254.55,
+      "size_bytes": 44363776,
+      "size_band": "small",
+      "cold_cid": true,
+      "sha256": "8b423f758d2b7e9c57ba99477a5d5fd6e03d64a16c3bd4b51cb706101ad9ffac",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-008",
+      "title": "The Cure",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/charlie-chaplin-.-the-cure-1917-classic-siletnt-film-noir-comedy",
+      "file_url": "https://archive.org/download/charlie-chaplin-.-the-cure-1917-classic-siletnt-film-noir-comedy/Charlie%20Chaplin%20.%20The%20Cure%20%281917%20Classic%2C%20Siletnt%2C%20Film%20noir%2C%20Comedy%29.mp4",
+      "file_name": "charlie-chaplin-.-the-cure-1917-classic-siletnt-film-noir-comedy_Charlie_Chaplin_._The_Cure_1917_Classic_Siletnt_Film_noir_Comedy_.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1917 film by Charlie Chaplin (Mutual Film Corporation), United States, published in 1917. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/charlie-chaplin-.-the-cure-1917-classic-siletnt-film-noir-comedy"
+      },
+      "resolution": "1280x720",
+      "duration_seconds": 1245.03,
+      "size_bytes": 160690903,
+      "size_band": "medium",
+      "cold_cid": true,
+      "sha256": "422b3be53f88149e63a2bb820f59f88b909da4a3981c66a7059e987c72a9e7d8",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-009",
+      "title": "The Cabinet of Dr. Caligari",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/DasKabinettdesDoktorCaligariTheCabinetofDrCaligari",
+      "file_url": "https://archive.org/download/DasKabinettdesDoktorCaligariTheCabinetofDrCaligari/The_Cabinet_of_Dr._Caligari_512kb.mp4",
+      "file_name": "DasKabinettdesDoktorCaligariTheCabinetofDrCaligari_The_Cabinet_of_Dr._Caligari_512kb.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1920 film by Robert Wiene (Decla-Bioscop), Germany, published in 1920. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries a Creative Commons public-domain dedication for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/DasKabinettdesDoktorCaligariTheCabinetofDrCaligari"
+      },
+      "resolution": "320x240",
+      "duration_seconds": 3061.46,
+      "size_bytes": 222148532,
+      "size_band": "medium",
+      "cold_cid": false,
+      "sha256": "3628535993ed18acbc79b3ba5bcbc9ee350f0b0a9fbe11cc55a818b745b34fad",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-010",
+      "title": "Cops",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/cops-buster-keaton",
+      "file_url": "https://archive.org/download/cops-buster-keaton/Cops%20Buster%20Keaton.mp4",
+      "file_name": "cops-buster-keaton_Cops_Buster_Keaton.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1922 film by Buster Keaton and Edward F. Cline (First National), United States, published in 1922. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/cops-buster-keaton"
+      },
+      "resolution": "640x360",
+      "duration_seconds": 1111.58,
+      "size_bytes": 229728503,
+      "size_band": "medium",
+      "cold_cid": false,
+      "sha256": "df6f4ce5d4b5e26642c9034dd6fded858dee8396cd197612ba382a258dc9b0c1",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-011",
+      "title": "Sherlock Jr.",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/sherlockjr1924_201909",
+      "file_url": "https://archive.org/download/sherlockjr1924_201909/Sherlock%20Jr.%20-%20Buster%20Keaton%20%281924%29%20HD%20%5B720p%5D.mp4",
+      "file_name": "sherlockjr1924_201909_Sherlock_Jr._-_Buster_Keaton_1924_HD_720p_.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1924 film by Buster Keaton (Metro Pictures), United States, published in 1924. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/sherlockjr1924_201909"
+      },
+      "resolution": "960x720",
+      "duration_seconds": 2673.85,
+      "size_bytes": 354283591,
+      "size_band": "medium",
+      "cold_cid": false,
+      "sha256": "b69240b97336d5de58297a15b6533d471664f00b84f7cfaeb91c86fae8d01464",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-012",
+      "title": "The Lost World",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/TheLostWorld1925",
+      "file_url": "https://archive.org/download/TheLostWorld1925/TheLostWorld1925_256.mp4",
+      "file_name": "TheLostWorld1925_TheLostWorld1925_256.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1925 film by Harry O. Hoyt, effects by Willis O'Brien (First National), United States, published in 1925. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/TheLostWorld1925"
+      },
+      "resolution": "320x240",
+      "duration_seconds": 5505.96,
+      "size_bytes": 243300462,
+      "size_band": "medium",
+      "cold_cid": true,
+      "sha256": "e642dd93232be6247631b152bf8a40526a43cbb52ff0ad3571f1d864f8342061",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-013",
+      "title": "Battleship Potemkin",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/BattleshipPotemkin",
+      "file_url": "https://archive.org/download/BattleshipPotemkin/Battleship_Potemkin_512kb.mp4",
+      "file_name": "BattleshipPotemkin_Battleship_Potemkin_512kb.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1925 film by Sergei Eisenstein (Goskino), Soviet Union, published in 1925. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries a Creative Commons public-domain dedication for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/BattleshipPotemkin"
+      },
+      "resolution": "320x240",
+      "duration_seconds": 4381.41,
+      "size_bytes": 317355846,
+      "size_band": "medium",
+      "cold_cid": false,
+      "sha256": "803985b80fa2f6cf7112ff3783d41991857a15469a6d6c1f323862099fb5562e",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-014",
+      "title": "Plane Crazy",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/plane-crazy-1928_202406",
+      "file_url": "https://archive.org/download/plane-crazy-1928_202406/Plane%20Crazy%20%281928%29.mp4",
+      "file_name": "plane-crazy-1928_202406_Plane_Crazy_1928_.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1928 film by Walt Disney and Ub Iwerks, United States, published in 1928. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack. First shown in 1928 and released with sound in 1929; either way published before 1931.",
+        "reference_url": "https://archive.org/details/plane-crazy-1928_202406"
+      },
+      "resolution": "1920x1080",
+      "duration_seconds": 359.14,
+      "size_bytes": 200738466,
+      "size_band": "medium",
+      "cold_cid": false,
+      "sha256": "72f97147420f0b23130b43758cc3dbff36ae7e1bf76cda008765382fd56c415a",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-015",
+      "title": "Steamboat Willie",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/steamboat-willie-1928_202406",
+      "file_url": "https://archive.org/download/steamboat-willie-1928_202406/Steamboat%20Willie%20%281928%29.mp4",
+      "file_name": "steamboat-willie-1928_202406_Steamboat_Willie_1928_.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1928 film by Walt Disney and Ub Iwerks (Disney Brothers Studio), United States, published in 1928. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack. The original 1928 soundtrack is part of the 1928 publication. Disney trademarks are unaffected.",
+        "reference_url": "https://archive.org/details/steamboat-willie-1928_202406"
+      },
+      "resolution": "1920x1080",
+      "duration_seconds": 466.65,
+      "size_bytes": 207711344,
+      "size_band": "medium",
+      "cold_cid": false,
+      "sha256": "cd34532bf9e7e8a7f71de6046dcc57db8d8418721302a13f29ea0d1fb049f692",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-016",
+      "title": "Nosferatu",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/Nosferatu1922",
+      "file_url": "https://archive.org/download/Nosferatu1922/Nosferatu-smaller2.mp4",
+      "file_name": "Nosferatu1922_Nosferatu-smaller2.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1922 film by F. W. Murnau (Prana Film), Germany, published in 1922. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries a CC0 1.0 public-domain dedication for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/Nosferatu1922"
+      },
+      "resolution": "320x240",
+      "duration_seconds": 5514.2,
+      "size_bytes": 525292427,
       "size_band": "large",
       "cold_cid": false,
-      "sha256": "655f3b521f7bd66abfc679fcd84e7988c1654fad7420e23f09a848a29375f21d",
-      "placeholder": true
+      "sha256": "736e0e47132c371f6db91bfbdfbed8898490472c5b9d366da8ccf43a85543243",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-017",
+      "title": "Nanook of the North (silent version)",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/NanookOfTheNorthsilent",
+      "file_url": "https://archive.org/download/NanookOfTheNorthsilent/Nanook%20of%20the%20North.mp4",
+      "file_name": "NanookOfTheNorthsilent_Nanook_of_the_North.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1922 film by Robert J. Flaherty (Pathé Exchange), United States, published in 1922. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/NanookOfTheNorthsilent"
+      },
+      "resolution": "640x480",
+      "duration_seconds": 4684.86,
+      "size_bytes": 474729894,
+      "size_band": "large",
+      "cold_cid": false,
+      "sha256": "716e6e1e4ec45edfde8bce09309879673fecf322779bbaa2804a0e7d7ffe9f6f",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-018",
+      "title": "Safety Last!",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/safety-last-final_202506",
+      "file_url": "https://archive.org/download/safety-last-final_202506/Safety%20Last%21%20Final.mp4",
+      "file_name": "safety-last-final_202506_Safety_Last_Final.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1923 film by Fred C. Newmeyer and Sam Taylor, starring Harold Lloyd (Hal Roach / Pathé Exchange), United States, published in 1923. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/safety-last-final_202506"
+      },
+      "resolution": "662x480",
+      "duration_seconds": 4432.69,
+      "size_bytes": 450550280,
+      "size_band": "large",
+      "cold_cid": false,
+      "sha256": "719442d19b233be7387191dbe48e2a02f34f4b31b17ae06bedba8b691332e724",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-019",
+      "title": "The Gold Rush (1925 release)",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/the-gold-rush-film-1925",
+      "file_url": "https://archive.org/download/the-gold-rush-film-1925/The-Gold-Rush-1925.mp4",
+      "file_name": "the-gold-rush-film-1925_The-Gold-Rush-1925.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1925 film by Charlie Chaplin (United Artists), United States, published in 1925. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries the Public Domain Mark 1.0 for the whole file, including any added soundtrack. This is the original 1925 silent release, not the separately copyrighted 1942 reissue.",
+        "reference_url": "https://archive.org/details/the-gold-rush-film-1925"
+      },
+      "resolution": "640x480",
+      "duration_seconds": 5194.88,
+      "size_bytes": 457641337,
+      "size_band": "large",
+      "cold_cid": true,
+      "sha256": "d3c55f2fdcfb65392a2411c208249744e5c9b045aa1b40a908d346bca76002ee",
+      "placeholder": false
+    },
+    {
+      "work_id": "pd-020",
+      "title": "The General",
+      "source": "Internet Archive",
+      "url": "https://archive.org/details/The_General_Buster_Keaton",
+      "file_url": "https://archive.org/download/The_General_Buster_Keaton/The_General.mp4",
+      "file_name": "The_General_Buster_Keaton_The_General.mp4",
+      "license": {
+        "status": "public_domain",
+        "basis": "1926 film by Buster Keaton and Clyde Bruckman (United Artists), United States, published in 1926. Works published before 1931 are in the U.S. public domain (copyright term expired; 17 U.S.C. §304). The Internet Archive item carries a Creative Commons public-domain dedication for the whole file, including any added soundtrack.",
+        "reference_url": "https://archive.org/details/The_General_Buster_Keaton"
+      },
+      "resolution": "640x480",
+      "duration_seconds": 4723.85,
+      "size_bytes": 412400222,
+      "size_band": "large",
+      "cold_cid": false,
+      "sha256": "a92854b4d68581cc9a5a8d648abe1b21e4e0938d90cc6a70f6cc18a5bf4417ad",
+      "placeholder": false
     }
   ]
 }
