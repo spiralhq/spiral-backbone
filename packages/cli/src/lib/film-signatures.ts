@@ -34,6 +34,9 @@ interface FilmHistory {
 }
 
 const PAGE_LIMIT = 1000;
+/** The RPC's blockTime and the program's Clock::unix_timestamp are derived separately and can
+ * differ by a few seconds for the same slot. */
+export const DECLARED_AT_TOLERANCE_SECONDS = 30n;
 
 export function peerHex(peerId: ReadonlyUint8Array, peerIdLen: number): string {
   return Buffer.from(peerId.slice(0, peerIdLen)).toString("hex");
@@ -127,6 +130,10 @@ async function readFilmHistory(rpc: FilmHistoryRpc, filmPda: Address): Promise<F
   }
 }
 
+function abs(value: bigint): bigint {
+  return value < 0n ? -value : value;
+}
+
 function missingSignatures(
   history: FilmHistory,
   active: { peer: string; declaredAt: bigint }[],
@@ -140,9 +147,12 @@ function missingSignatures(
     const declare = history.declareByPeer.get(peer);
     if (!declare) {
       missing.push(`declare_replica for PeerID ${peer}`);
-    } else if (declare.blockTime !== declaredAt) {
+    } else if (
+      declare.blockTime === null ||
+      abs(declare.blockTime - declaredAt) > DECLARED_AT_TOLERANCE_SECONDS
+    ) {
       missing.push(
-        `declare_replica for PeerID ${peer} (newest is ${declare.signature} with blockTime ${declare.blockTime}, but the slot's declared_at is ${declaredAt})`,
+        `declare_replica for PeerID ${peer} (newest is ${declare.signature} with blockTime ${declare.blockTime}, but the slot's declared_at is ${declaredAt}, more than ${DECLARED_AT_TOLERANCE_SECONDS} s apart)`,
       );
     }
   }
@@ -152,7 +162,8 @@ function missingSignatures(
 /**
  * register_signature is the oldest successful register_film for this Film; each active replica's
  * signature is its newest successful declare_replica (a declare of an active PeerID is refused, so
- * that is the one that made it active), whose blockTime must equal the slot's declared_at.
+ * that is the one that made it active), whose blockTime must be within
+ * DECLARED_AT_TOLERANCE_SECONDS of the slot's declared_at.
  * Returned for active slots only, in slot order. Any unreadable history entry fails closed.
  */
 export async function resolveFilmSignatures(

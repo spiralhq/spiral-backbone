@@ -67,8 +67,9 @@ teardown — is in the [campaign runbook](campaign-runbook.md).
    discriminator and must name this Film. `register_signature` is the oldest successful
    `register_film`. `replica_signatures` has one entry per active slot, in slot order: the
    newest successful `declare_replica` for that PeerID, which is the one that made it active, and
-   its `blockTime` must equal the slot's `declared_at`. `replicas[]` also lists inactive slots, so
-   the two arrays are not index-aligned. If any signature cannot be determined after a few
+   its `blockTime` must be within 30 s of the slot's `declared_at` (the RPC's `blockTime` and the
+   program's clock are derived separately and can differ by a second or two for the same slot).
+   `replicas[]` also lists inactive slots, so the two arrays are not index-aligned. If any signature cannot be determined after a few
    retries (including a listed transaction that `getTransaction` does not return), submit exits 1
    and prints nothing on stdout;
 7. prints one `InventoryRecord` line.

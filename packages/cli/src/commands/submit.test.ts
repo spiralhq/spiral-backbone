@@ -304,6 +304,25 @@ describe("ensureFilmOnChain", () => {
     );
   });
 
+  it.each([1, -1, 30, -30])(
+    "accepts a declare whose blockTime is %i s off the slot's declaredAt",
+    async (offset) => {
+      const chain = new FakeFilmChain(FILM_PDA);
+      const first = await ensureFilmOnChain(chain, submission());
+      chain.txs[1]!.blockTime! += offset;
+      expect(await ensureFilmOnChain(chain, submission())).toEqual(first);
+    },
+  );
+
+  it("fails when the chosen declare's blockTime is 31 s off the slot's declaredAt", async () => {
+    const chain = new FakeFilmChain(FILM_PDA);
+    await ensureFilmOnChain(chain, submission());
+    chain.txs[2]!.blockTime! -= 31;
+    await expect(ensureFilmOnChain(chain, submission())).rejects.toThrow(
+      /declare_replica for PeerID 0024080112200202.*more than 30 s apart/,
+    );
+  });
+
   it("fails when the chosen declare has no blockTime", async () => {
     const chain = new FakeFilmChain(FILM_PDA);
     await ensureFilmOnChain(chain, submission());

@@ -118,6 +118,7 @@ export class FakeFilmChain implements FilmChain {
   }
 
   deactivate(slot: number): void {
+    this.clock += 3_600;
     const film = this.film!;
     film.replicas[slot] = { ...film.replicas[slot]!, active: false };
   }
