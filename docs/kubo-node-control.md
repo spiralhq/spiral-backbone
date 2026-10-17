@@ -19,6 +19,15 @@ because Kubo 0.43.1 refuses to start with the deprecated key, `Swarm.ConnMgr` bo
 `Datastore.GCPeriod="0"` so GC never runs mid-campaign) — safe to run twice
 because `ipfs config` writes are naturally idempotent.
 
+It also writes `$IPFS_PATH/libp2p-resource-limit-overrides.json` raising the resource
+manager's `System.ConnsInbound` to 20000. On public-DHT servers, Kubo 0.43.1's inbound
+connection counter drifts above the connections actually open (reservations taken on the
+inbound TCP path that are never released, measured at roughly 1–17 per minute depending on
+the node's inbound churn). With the default limit, derived from RAM (about 1950 on 4 GB),
+a node reached it after hours and refused new inbound connections, which made it
+unreachable to peers that were not already connected. The connection manager bounds above
+still cap the connections actually kept; the raised limit only leaves room for the drift.
+
 `ipfs.service` runs the daemon as a dedicated `ipfs` system user under
 systemd (`Type=simple`, `--enable-gc=false` matching the config above).
 

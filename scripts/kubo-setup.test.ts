@@ -51,4 +51,18 @@ describe("infra/kubo/setup.sh", () => {
     expect(stdout).toContain("Daemon is ready");
     expect(stdout).not.toMatch(/deprecated configuration/i);
   }, 120_000);
+
+  it("raises the system inbound connection limit in the running daemon", async () => {
+    const { stdout } = await runInKubo(
+      "/usr/local/bin/spiral-kubo-setup.sh >/dev/null && /usr/local/bin/spiral-kubo-setup.sh >/dev/null && " +
+        "(ipfs daemon > /tmp/daemon.log 2>&1 &) && " +
+        "for i in $(seq 1 60); do grep -q 'Daemon is ready' /tmp/daemon.log && break; sleep 0.5; done; " +
+        "ipfs swarm resources",
+    );
+    const limit = stdout
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/))
+      .find(([scope, name]) => scope === "system" && name === "ConnsInbound")?.[2];
+    expect(limit).toBe("20000");
+  }, 120_000);
 });

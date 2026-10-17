@@ -13,5 +13,6 @@ ipfs config --json Provide '{"Strategy":"pinned","DHT":{"Interval":"12h"}}'
 ipfs config --json Reprovider null
 ipfs config --json Swarm.ConnMgr '{"Type":"basic","LowWater":200,"HighWater":600}'
 ipfs config --json Datastore.GCPeriod '"0"'
+printf '%s\n' '{"System":{"ConnsInbound":20000}}' > "$IPFS_PATH/libp2p-resource-limit-overrides.json"
 
 echo "Spiral Kubo node setup complete."
