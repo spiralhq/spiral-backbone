@@ -1,25 +1,22 @@
 # IPFS nodes runbook
 
-Manual steps to provision the three Spiral Devnet-adjacent Kubo nodes. Nothing in
+Manual steps to provision the three Kubo nodes of the Spiral evaluation campaign. Nothing in
 `infra/kubo/` or `scripts/kubo-node-control.ts` creates cloud resources automatically —
 this document is what turns them into a real deployment.
 
 ## 1. Provision three VPS
 
-| Provider     | Region (example) | Spec                     | Billing |
-| ------------ | ---------------- | ------------------------ | ------- |
-| Hetzner      | Falkenstein, DE  | 2-4 vCPU / 40-80 GB disk | hourly  |
-| DigitalOcean | NYC, US          | 2-4 vCPU / 40-80 GB disk | hourly  |
-| Vultr        | São Paulo, BR    | 2-4 vCPU / 40-80 GB disk | hourly  |
+| Replica | Provider     | Region (example) | Spec                     | Billing |
+| ------- | ------------ | ---------------- | ------------------------ | ------- |
+| `a`     | DigitalOcean | New York, US     | 2-4 vCPU / 40-80 GB disk | hourly  |
+| `b`     | Hetzner      | Falkenstein, DE  | 2-4 vCPU / 40-80 GB disk | hourly  |
+| `c`     | Vultr        | São Paulo, BR    | 2-4 vCPU / 40-80 GB disk | hourly  |
 
 Three providers, three autonomous systems, three regions — deliberate, so no single
-provider's network conditions dominate the H2 degradation results. Use a fresh Ubuntu
-or Debian image on each. The campaign also rents a 4th server (the orchestrator, on
-Hetzner); see the [campaign runbook](campaign-runbook.md) for the full sequence and the
-cost table.
-
-The campaign runbook fixes which provider hosts replica `a`, `b` and `c` (`a` must not share a
-provider with the orchestrator): follow its ordering, [campaign runbook §0](campaign-runbook.md#0-overview-cost-and-the-end-to-end-gate).
+provider's network conditions dominate the H2 degradation results. Replica `a` must not share a
+provider with the orchestrator, a 4th server rented on Hetzner (the reason is in
+[campaign runbook §0](campaign-runbook.md#0-overview-cost-and-the-end-to-end-gate), together with
+the cost table). Use a fresh Ubuntu or Debian image on each server.
 
 **A powered-off server is still billed. Only deleting it stops the cost.**
 
@@ -120,8 +117,8 @@ ssh -L 5001:127.0.0.1:5001 spiral@<node-host>
 
 ## 6. Set up SSH access for the control agent
 
-`scripts/kubo-node-control.ts` drives `start`/`shutdown`/status checks over SSH — this
-is what a remote orchestrator will use for the H2 progressive-degradation test
+`scripts/kubo-node-control.ts` drives `start`/`shutdown`/status checks over SSH — the H2
+orchestrator uses it for the progressive-degradation test
 (3 → 2 → 1 → 0 replicas). Create a dedicated control-machine SSH key and authorize it:
 
 ```bash

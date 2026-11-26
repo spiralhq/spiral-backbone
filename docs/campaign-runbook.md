@@ -22,8 +22,8 @@ Commands run from the root of the `spiral-backbone` checkout unless a step says 
 ## 0. Overview, cost and the end-to-end gate
 
 **Run the full test suite on the workstation first.** CI skips the end-to-end suites: they need
-the sibling `spiral-programs` build, the `solana-keygen` CLI, Surfpool and Docker, and
-`spiral-programs` is private. So no CI run proves them. On the workstation, with `spiral-programs`
+the sibling `spiral-programs` build, the `solana-keygen` CLI, Surfpool and Docker, and CI does not
+check out `spiral-programs`. So no CI run proves them. On the workstation, with `spiral-programs`
 checked out at the tag you will deploy (§1) and built (`anchor build`), and `spiral-backbone` at
 the commit you will run on the orchestrator:
 
@@ -296,14 +296,14 @@ Background on the H2 orchestrator, executor and network node:
    ufw enable
    ```
 
-3. **Repository and program build directory.** Do not clone `spiral-programs` here: it is private,
-   and the off-chain checks need only the build output you copy in step 4. Pre-flight's
+3. **Repository and program build directory.** `spiral-programs` is not cloned here: the
+   off-chain checks need only the build output you copy in step 4. Pre-flight's
    `--programs-dir` defaults to `../spiral-programs`, so create that directory next to the
    checkout; it will hold only `target/`:
 
    ```bash
    cd ~
-   git clone <spiral-backbone remote> spiral-backbone
+   git clone https://github.com/spiralhq/spiral-backbone.git
    mkdir -p spiral-programs
    cd ~/spiral-backbone
    npm ci
@@ -400,11 +400,10 @@ Background on the H2 orchestrator, executor and network node:
    tmux attach -t campaign   # reattach later
    ```
 
-   For H2 only, a user service is an alternative (lingering was enabled in step 1). H2 reads its
-   RPC URL from `topology.json`, so it needs no environment; do not use this for H1, H3 or H4,
-   which would lose `SPIRAL_RPC_URL`:
-
-   Start it with the resume wrapper of [§9 step 4](#9-h2), which also handles restarts.
+   For H2 only, a user service is an alternative to `tmux` (lingering was enabled in step 1):
+   start it with the resume wrapper of [§9 step 4](#9-h2), which also handles restarts. H2 reads
+   its RPC URL from `topology.json`, so it needs no environment variable. Do not use a user service
+   for H1, H3 or H4, which would not receive `SPIRAL_RPC_URL`.
 
 **Do not run test or dry-run commands into the campaign's `results/`.** The report shows the
 latest run per hypothesis, and H2 dry runs would append to `results/h2.ndjson`. Use another
@@ -529,7 +528,7 @@ On the workstation, with all three replicas running:
    not serving per-signature `blockTime` (or keeps too little history). **Change provider before
    step 3**, then rerun the same probe command against the new one until it passes. The probe
    organization and its Film are outside the golden, so H4 and pre-flight ignore them. The
-   [Devnet acceptance rehearsal](eval-harness.md#devnet-acceptance-manual--researcher) is the
+   [Devnet acceptance rehearsal](eval-harness.md#devnet-acceptance-manual) is the
    longer form of this check.
 
 3. **Submit every work.** Use `--silent` in this exact position: without it npm prints its

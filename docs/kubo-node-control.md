@@ -1,8 +1,7 @@
 # Kubo node setup and remote control
 
-The automation that turns provisioning the three real Kubo nodes into a
-command instead of a manual procedure. For the actual step-by-step VPS
-provisioning instructions, see
+The code that configures the three Kubo nodes and controls them remotely. Provisioning the servers
+is manual; for the step-by-step instructions, see
 [`docs/ipfs-nodes-runbook.md`](ipfs-nodes-runbook.md) — this document
 explains how the underlying code works.
 

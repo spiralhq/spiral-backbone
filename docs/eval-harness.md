@@ -79,8 +79,8 @@ Collect those lines into `results/inventory-golden.ndjson`: that file is the onl
 If replicas are later deactivated on-chain, the golden no longer matches. H4 then reports
 `filmReplicas.active` divergences, which is correct behavior and not a bug.
 
-**Older goldens.** Golden lines captured before H2 have no `cold_cid` and no longer parse. Re-run
-submit to regenerate them. No default is applied, on purpose: guessing `cold_cid` could let a
+**`cold_cid` is required.** A golden line without it does not parse; re-run submit to
+regenerate it. No default is applied, on purpose: guessing `cold_cid` could let a
 cold work through the gateway before the zero-replica block.
 
 **Partial submit.** `register_film` and each `declare_replica` are separate transactions, so a
@@ -487,8 +487,8 @@ The chain must drain its events (see [the embedded Surfpool stall](solana-kit-no
 The operator sequence is in the [campaign runbook](campaign-runbook.md); this section only lists
 what H2 itself requires.
 
-- **Campaign.** The campaign composition is the researcher's decision, written as a campaign
-  spec: `packages/eval/campaigns/h2-final.json`.
+- **Campaign.** The campaign composition is defined in a campaign spec:
+  `packages/eval/campaigns/h2-final.json`.
 - **Timing.** On the public DHT, a gate needs minutes in total, not seconds, for provider records
   to propagate after a restart. `h2-final.json` gets them from repeated short gates:
   `stabilization_ms: 30000` × up to `max_gate_attempts: 20` bounds each gate at about 10 minutes,
@@ -584,7 +584,7 @@ genesis hash only for a local validator. `eval:h1` also calls the Kubo API (`/ap
 before the loop and exits 1 with `Kubo API unreachable at <host> — is the tunnel open?` when it
 fails.
 
-## Devnet acceptance (manual — researcher)
+## Devnet acceptance (manual)
 
 Deploy the programs first: [campaign runbook §1](campaign-runbook.md#1-devnet-programs) (key
 backup, deploy, IDL metadata, payer, and why pre-flight checks the deployed bytecode against your
@@ -597,8 +597,8 @@ export SPIRAL_RPC_URL=https://<dedicated devnet endpoint>
 mkdir -p scratch/results
 # one Kubo node reachable at http://127.0.0.1:5001 (e.g. infra/kubo or a container)
 npm run spiral -- org create --slug spiral-eval --name "Spiral Eval" --cluster devnet --rpc-url "$SPIRAL_RPC_URL"
-npm run spiral --silent -- submit --org spiral-eval --work-id pd-001 --file dataset/files/DuckandC1951.mp4 \
-  --title "Duck and Cover" --replicas http://127.0.0.1:5001 --cluster devnet --rpc-url "$SPIRAL_RPC_URL" \
+npm run spiral --silent -- submit --org spiral-eval --work-id pd-001 --file dataset/files/gugusse-et-l-automate-1897.webm.-1080p.vp-9_Gugusse_et_l_Automate_-_1897.webm.1080p.vp9.webm \
+  --title "Gugusse et l'Automate" --replicas http://127.0.0.1:5001 --cluster devnet --rpc-url "$SPIRAL_RPC_URL" \
   >> scratch/results/inventory-golden.ndjson
 npm run eval:h1 -- --golden scratch/results/inventory-golden.ndjson --kubo-url http://127.0.0.1:5001 --out scratch/results/h1.ndjson --label devnet
 npm run eval:h3 -- --out scratch/results/h3.ndjson   # no --label: each run needs a fresh one (see H3)

@@ -51,8 +51,8 @@ does not decode them, for the same reason.
 
 ## Schema notes
 
-- Columns mirror the generated account types exactly (e.g. `Organization` has no `film_count`,
-  even though one was once planned). The only local column is `indexed_at`, never compared.
+- Columns mirror the generated account types exactly (e.g. `Organization` has no `film_count`).
+  The only local column is `indexed_at`, never compared.
 - `films.cid` stores exactly `cid_len` bytes; base32 is derived at query time with
   `bytesToCidString` from `@spiral-backbone/protocol`.
 - `film_replicas` has one row per slot `< replica_count`, deactivated replicas included.
@@ -68,10 +68,11 @@ does not decode them, for the same reason.
 CASCADE` leaves the journal behind and the next `migrate()` recreates nothing — the exact H4
 sequence would silently produce an empty database.
 
-## `follow` mode: cut
+## No `follow` mode
 
-The optional `logsSubscribe` mode was cut for schedule. No hypothesis depends on it. The `sync_cursor` table exists (slot + signature) so that adding it
-later needs no migration, but nothing writes to it today.
+The indexer only runs backfills; it has no live `logsSubscribe` mode, and no hypothesis depends on
+one. The `sync_cursor` table (slot + signature) is reserved for it, so adding the mode needs no
+migration. Nothing writes to the table today.
 
 ## Tests
 

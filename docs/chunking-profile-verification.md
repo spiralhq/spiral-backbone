@@ -39,7 +39,7 @@ independence real instead of a convention someone could accidentally erode.
 One deliberate gap from the profile table above: `ipfs-unixfs-importer`
 doesn't expose a `hasher` option in the version this repo uses (`17.1.1`) —
 sha2-256 is hardcoded internally. The outcome is identical either way; the
-code just doesn't pass an option that no longer exists.
+code simply passes no `hasher` option.
 
 ## The Kubo side (`packages/eval/src/`)
 
@@ -48,8 +48,7 @@ code just doesn't pass an option that no longer exists.
 starts one on a random host port and polls `/api/v0/version` until it
 answers; the returned `stop()` tears it down. If anything after `docker run`
 fails (port resolution, readiness), the container is stopped before the
-error propagates — an earlier version of this code could leak a running
-container on that exact failure path.
+error propagates.
 
 `kubo-client.ts`'s `addWithSpiralProfile(apiUrl, content)` submits via
 `kubo-rpc-client` with the profile's flags (`cidVersion: 1, rawLeaves: true,
@@ -82,5 +81,5 @@ in milliseconds instead of seconds.
 
 This test is mandatory in CI (`.github/workflows/ci.yml` pulls
 `ipfs/kubo:v0.43.1` ahead of time to keep the first run from looking like a
-timeout) — a wrong profile is meant to fail here, as an engineering bug,
-before it ever becomes a research result.
+timeout). A wrong profile fails here, as an engineering bug,
+before it can affect a research result.

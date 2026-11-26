@@ -2,9 +2,13 @@
 
 <div align="center">
 
-[![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A520-informational?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
-[![Turborepo](https://img.shields.io/badge/Turborepo-monorepo-blueviolet?style=for-the-badge&logo=turborepo&logoColor=white)](https://turbo.build/repo)
-[![License](https://img.shields.io/github/license/spiralhq/spiral-backbone?style=for-the-badge)](LICENSE)
+[![CI](https://github.com/spiralhq/spiral-backbone/actions/workflows/ci.yml/badge.svg)](https://github.com/spiralhq/spiral-backbone/actions/workflows/ci.yml)
+[![TypeScript 6](docs/assets/badges/typescript.svg)](https://www.typescriptlang.org)
+[![Node.js 22.18 or later](docs/assets/badges/node.svg)](https://nodejs.org)
+[![Solana Devnet](docs/assets/badges/solana.svg)](https://solana.com)
+[![IPFS Kubo 0.43.1](docs/assets/badges/ipfs.svg)](https://ipfs.tech)
+[![PostgreSQL 18](docs/assets/badges/postgres.svg)](https://www.postgresql.org)
+[![License MIT](docs/assets/badges/license.svg)](LICENSE)
 
 **Off-chain half of the Spiral protocol**
 
@@ -31,7 +35,7 @@ reconstructibility of the query layer. They are defined in
 them is in [`docs/campaign-runbook.md`](docs/campaign-runbook.md).
 
 This is a TypeScript monorepo managed with npm workspaces and Turborepo.
-Linting and formatting run on Oxlint/Oxfmt — no ESLint, no Prettier.
+Linting and formatting use Oxlint and Oxfmt.
 
 ---
 
@@ -41,22 +45,21 @@ Linting and formatting run on Oxlint/Oxfmt — no ESLint, no Prettier.
 spiral-backbone/
 ├── packages/
 │   ├── config/          # Shared tsconfig base used by every package
-│   ├── db/               # Database schema & queries (Drizzle ORM, Postgres)
-│   ├── protocol/        # Protocol-level types/logic shared across packages
-│   ├── cli/              # Command-line interface
+│   ├── db/              # Database schema and queries (Drizzle ORM, Postgres)
+│   ├── protocol/        # Protocol types and logic shared across packages
+│   ├── cli/             # Command-line interface
 │   ├── indexer/         # Off-chain indexer
-│   └── eval/             # Evaluation harness
+│   └── eval/            # Evaluation harness
 │       └── verifier/    # Isolated CID re-computation, evidence for H1
 ├── infra/
-│   └── kubo/              # Kubo node setup script + systemd unit
-├── scripts/              # Import-boundary checker, manifest validator,
-│                          #   Kubo node control agent, daily campaign archive
-└── dataset/              # Evaluation dataset (curated works)
+│   └── kubo/            # Kubo node setup script and systemd unit
+├── scripts/             # Import-boundary checker, manifest validator,
+│                        #   Kubo node control agent, daily campaign archive
+├── docs/                # Runbooks and technical notes
+└── dataset/             # Evaluation dataset (curated works)
 ```
 
-There is no `apps/` package and no HTTP API/server in this repo — none of
-the protocol's research hypotheses require one. The `apps/*` workspace glob
-exists in `package.json` for forward compatibility but is currently empty.
+The repository has no HTTP API or server: none of the research hypotheses require one.
 
 ---
 
@@ -78,29 +81,38 @@ itself.
 
 ### 🛰️ CLI
 
-The protocol CLI: `org create`, `submit`, `fetch`, `verify`.
+The protocol CLI: `org` (`create`, `grant`, `revoke`), `submit`, `fetch` and
+`verify`.
 
 ### 🗄️ DB
 
 Database schema and queries for the query-layer catalog, via Drizzle ORM
 over PostgreSQL.
 
+### 🔗 Protocol
+
+Types and logic shared across packages, including the clients generated from the
+on-chain programs' IDLs.
+
 ---
 
 ## 🔐 Import Boundaries
 
-Two cross-package import boundaries are enforced (see
-`scripts/check-boundaries.ts` for the rationale):
+`scripts/check-boundaries.ts` enforces these rules:
 
-- `packages/eval/verifier/` must never import `@spiral-backbone/protocol`
-  or any Kubo/IPFS client library — this keeps H1's CID re-computation
-  evidence structurally independent.
-- `packages/cli/src/commands/fetch(.ts|/**)` must never import
-  `@spiral-backbone/db` or `@spiral-backbone/indexer`.
+- `packages/eval/verifier/` must not import `@spiral-backbone/protocol`, any
+  Kubo/IPFS client library or `packages/eval/src/`. This keeps H1's CID
+  re-computation structurally independent.
+- `packages/eval/src/`, except `h4/`, must not import `@spiral-backbone/db` or
+  `@spiral-backbone/indexer`.
+- The CLI's `fetch` command must not import `@spiral-backbone/db` or
+  `@spiral-backbone/indexer`.
+- `findMembershipPda` must not be imported from the generated `film` client; use
+  the one from the `organization` program.
 
-These are enforced two ways in parallel: an Oxlint `no-restricted-imports`
-override (`.oxlintrc.json`, catches dynamic `import()` too) and the custom
-regex-based `scripts/check-boundaries.ts` script — redundant on purpose.
+The import restrictions in the first three rules are also configured as Oxlint
+`no-restricted-imports` overrides (`.oxlintrc.json`). The redundancy is
+intentional.
 
 ---
 
@@ -109,14 +121,16 @@ regex-based `scripts/check-boundaries.ts` script — redundant on purpose.
 The Spiral Chunking Profile v1 (CID version 1, sha2-256, fixed
 262144-byte chunks, raw leaves, balanced layout, 174 links/node) is
 implemented twice, independently: `packages/eval/verifier/` (pure
-TypeScript, `ipfs-unixfs-importer`) and the Kubo submission path exercised
-in `packages/eval/src/conformance.test.ts`. That test compares both on
-three synthetic file sizes and runs in CI on every push.
+TypeScript, `ipfs-unixfs-importer`) and the Kubo submission path
+in `packages/eval/src/kubo-client.ts`. `packages/eval/src/conformance.test.ts`
+compares both on three synthetic file sizes and runs in CI on every push
+(details in
+[`docs/chunking-profile-verification.md`](docs/chunking-profile-verification.md)).
 
 `infra/kubo/` and `scripts/kubo-node-control.ts` are the automation for the
 real Kubo nodes described in
 [`docs/ipfs-nodes-runbook.md`](docs/ipfs-nodes-runbook.md) — provisioning
-the VPS themselves is a manual step; everything else (setup, the systemd
+the servers is a manual step; everything else (setup, the systemd
 unit, and SSH start/shutdown/status control) is code, tested against local
 Docker containers.
 
@@ -128,7 +142,7 @@ Docker containers.
 
 | Tool       | Version                               |
 | ---------- | ------------------------------------- |
-| Node.js    | ≥ 20 (22/26 used in campaign)         |
+| Node.js    | ≥ 22.18 (CI and campaign use 26)      |
 | npm        | 11.19.1 (pinned via `packageManager`) |
 | PostgreSQL | 18                                    |
 | Docker     | required for the full test suite      |
@@ -169,9 +183,7 @@ after changing a schema with:
 npm run env:generate
 ```
 
-This runs `varlock codegen --path ./packages/db/` directly — there is no
-server bootstrap involved, since there is no server in this repo. Commit
-schema files; keep secrets in ignored env files or your deployment
+Commit schema files; keep secrets in ignored env files or your deployment
 platform.
 
 ---
@@ -182,12 +194,12 @@ platform.
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `npm run build`                                                                             | Build all packages                                                                                     |
 | `npm run check-types`                                                                       | Type-check the root `scripts/` directory and every workspace package                                   |
-| `npm run check`                                                                             | Oxlint, Oxfmt (`--write`), the import-boundary check, and the scripts test suite — requires Docker     |
+| `npm run check`                                                                             | Oxlint, Oxfmt (`--write`), import boundaries, manifest validation and script tests (requires Docker)   |
 | `npm run check:ci`                                                                          | Same as `check`, but Oxfmt runs with `--check` so CI fails on unformatted code instead of rewriting it |
 | `npm run test`                                                                              | `turbo run test` across all packages                                                                   |
 | `npm run test:scripts`                                                                      | Vitest suite for `scripts/`                                                                            |
 | `npm run check:boundaries`                                                                  | Runs the import-boundary checker directly                                                              |
-| `npm run spiral`                                                                            | The protocol CLI (`org create`, `submit`, `fetch`, `verify`)                                           |
+| `npm run spiral`                                                                            | The protocol CLI (`org`, `submit`, `fetch`, `verify`)                                                  |
 | `npm run indexer`                                                                           | The indexer CLI                                                                                        |
 | `npm run validate:manifest`                                                                 | Validate `dataset/manifest.json` (`-- --final` for the campaign)                                       |
 | `npm run eval:h1` / `h2` / `h3` / `h4` / `report`                                           | The evaluation harness (`npm run eval` runs the bare CLI)                                              |
@@ -214,7 +226,7 @@ built first (campaign runbook §0).
 
 ## 📜 License
 
-MIT License.
+[MIT](LICENSE).
 
 ---
 

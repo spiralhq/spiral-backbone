@@ -1,8 +1,7 @@
 # @solana/kit implementation notes
 
 Gotchas discovered while building `packages/protocol` and `packages/cli` that
-aren't obvious from Kit's own docs. Referenced from a few source comments; kept here instead
-of repeated inline.
+aren't obvious from Kit's own docs.
 
 ## RPC and WebSocket URL resolution
 
@@ -30,8 +29,8 @@ a client to get a real `KeyPairSigner`.
 
 Resolves to a `SuccessfulSingleTransactionPlanResult`, not a bare signature string —
 `{ context, kind, planType, plannedMessage, status }`. The signature is at
-`.context.signature`. `${result}` silently stringifies to `"[object Object]"`, which passed
-type-checking undetected until a real send in the CLI's end-to-end test caught it.
+`.context.signature`. `${result}` silently stringifies to `"[object Object]"`,
+and type-checking does not catch it.
 
 ## Event-CPI accounts aren't auto-defaulted
 
@@ -44,8 +43,8 @@ PDA-derivable accounts, Codama doesn't default these two — confirmed for both
 ## Codama PDA finders need IDL `pda` metadata
 
 Codama only auto-generates a `find{Name}Pda` for an account when the IDL's `pda` field
-expresses its seeds. `organization.json` has 8 such entries (`findOrganizationPda`,
-`findMembershipPda`, `findAdminMembershipPda` all generated). Film's PDA seed is
+expresses its seeds. `organization.json` does, so `findOrganizationPda`, `findMembershipPda`,
+`findAdminMembershipPda` and `findNewAuthorityMembershipPda` are generated. Film's PDA seed is
 `sha256(cid[..cidLen])`, which Anchor's IDL seed DSL can't express (no
 Borsh-length-prefix-aware slicing) — so `findFilmPda` (`packages/protocol/src/pda.ts`) is
 hand-written and hand-verified against a real generated PDA value instead. The same gap means
@@ -70,9 +69,8 @@ folder directly instead — the layout every consumer in this codebase imports f
 
 `packages/cli/src/e2e/submit-fetch-verify.test.ts` needs a sibling `spiral-programs` checkout
 with `anchor build` already run, plus the `solana-keygen` CLI — neither is available on a
-plain CI runner, and provisioning cross-repo checkout credentials for a private repo is
-security-sensitive and out of scope. The test skips gracefully with a clear message when
-either is missing (`SPIRAL_E2E=required` turns that into a hard failure instead, for a
+plain CI runner, and the CI workflow does not set them up. The test
+skips gracefully with a clear message when either is missing (`SPIRAL_E2E=required` turns that into a hard failure instead, for a
 developer or pre-merge check that needs the guarantee it actually ran). Full e2e verification
 is a local-only run.
 
